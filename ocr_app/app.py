@@ -7,6 +7,15 @@ from tts_service import TTSService
 import re
 import cv2
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+import easyocr
+easy_reader = easyocr.Reader(['en'])
+
+from spellchecker import SpellChecker
+spell = SpellChecker()
+
 # IMPORTANT: Set Tesseract path (use your actual path)
 pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
 
@@ -33,7 +42,6 @@ def ocr():
         return jsonify({"text": "No file uploaded"}), 400
 
     file = request.files["photo"]
-
     image = Image.open(file)
 
     # Fix rotation
@@ -44,29 +52,30 @@ def ocr():
     if max(image.size) > MAX_SIZE:
         image.thumbnail((MAX_SIZE, MAX_SIZE))
 
-    # Convert to grayscale
+    # ---- HANDWRITING OR PRINTED? ----
+    if looks_handwritten(image):
+        # Use EasyOCR for handwriting
+        text = run_easyocr(image)
+        cleaned_text = clean_text(text)
+        cleaned_text = spell_fix(cleaned_text)
+        return jsonify({"text": cleaned_text})
+
+    # ---- PRINTED TEXT (TESSERACT PATH) ----
     image = image.convert("L")
-
-    # remove tilt to images
-    image = deskew(image)
-
-    # Detect black backgrounds on white text
     image = auto_invert(image)
 
-    # Boost contrast
     enhancer = ImageEnhance.Contrast(image)
     image = enhancer.enhance(2.0)
 
-    # Sharpen
     image = image.filter(ImageFilter.SHARPEN)
 
-    # Get string from image
     text = pytesseract.image_to_string(image)
 
-    # Cleanup
     cleaned_text = manual_replacement(clean_text(text))
-    
+    cleaned_text = spell_fix(cleaned_text)
+
     return jsonify({"text": cleaned_text})
+
 
 def clean_text(t):
     t = t.replace("\n\n", "\n")          # collapse blank lines
@@ -89,6 +98,13 @@ def manual_replacement(text):
 
     t = text
 
+    # 0 mistaken for o
+    t = re.sub(r'(?<=t)0', 'o', t)  # t0 -> to
+    t = re.sub(r'(?<=T)0', 'o', t)
+
+    # + mistaken for t (OCR sees the cross)
+    t = re.sub(r'\+', 't', t)
+
     # Replace | when used as a standalone word
     t = re.sub(r"\b\|\b", "I", t)
 
@@ -106,30 +122,40 @@ def manual_replacement(text):
 
     return t
 
-def deskew(pil_img):
+def looks_handwritten(pil_img):
     img = np.array(pil_img)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # If grayscale, skip color conversion
-    if len(img.shape) == 2:
-        gray = img
-    else:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Use edges to estimate structure
+    edges = cv2.Canny(gray, 30, 150)
+    edge_density = edges.mean()
 
-    coords = np.column_stack(np.where(gray < 255))
-    angle = cv2.minAreaRect(coords)[-1]
+    # Handwriting tends to have FAR fewer sharp edges than printed text
+    return edge_density < 5
 
-    if angle < -45:
-        angle = -(90 + angle)
-    else:
-        angle = -angle
+def run_easyocr(pil_img):
+    img = np.array(pil_img)
+    results = easy_reader.readtext(img, detail=0)
+    return " ".join(results)
 
-    (h, w) = img.shape[:2]
-    M = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
-    rotated = cv2.warpAffine(img, M, (w, h),
-                             flags=cv2.INTER_CUBIC,
-                             borderMode=cv2.BORDER_REPLICATE)
+def spell_fix(text):
+    corrected = []
+    for word in text.split():
+        # If it's an ordinal like "2nd", DO NOT CORRECT
+        if protect_ordinals(word):
+            corrected.append(word)
+            continue
 
-    return Image.fromarray(rotated)
+        # Normal spellcheck
+        fixed = spell.correction(word)
+        corrected.append(fixed if fixed else word)
+    return " ".join(corrected)
+
+def protect_ordinals(word):
+    # Match patterns like 1st, 2nd, 3rd, 4th, 21st, 33rd, 100th
+    if re.fullmatch(r"\d+(st|nd|rd|th)", word.lower()):
+        return True
+    return False
 
 @app.route("/credits")
 def credits():
