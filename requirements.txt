@@ -3,3 +3,4 @@ pytesseract
 pillow
 numpy
 opencv-python-headless
+fish-audio-sdk
