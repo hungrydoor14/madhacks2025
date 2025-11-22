@@ -11,7 +11,7 @@
 </head>
 <body>
 
-<h2>📸 Take Photo for OCR</h2>
+<h2>Take Photo for OCR</h2>
 
 <!-- Choose File Button -->
 <input type="file" id="filePicker" accept="image/*" style="display:none;">
@@ -26,10 +26,25 @@
 <img id="preview">
 <pre id="result"></pre>
 
-<button id="speakBtn" style="display:none;">🔊 Read Aloud</button>
+<button id="speakBtn" style="display:none;">Read aloud WIP STILL NOT WORKING</button>
 
 <script>
 let selectedFile = null;
+
+async function checkCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById("cameraBtn").style.display = "none";
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    stream.getTracks().forEach(t => t.stop());
+  } catch (err) {
+    document.getElementById("cameraBtn").style.display = "none";
+  }
+}
+checkCamera();
 
 // ---- Choose file from storage ----
 document.getElementById("chooseFileBtn").onclick = () => {

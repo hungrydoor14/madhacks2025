@@ -20,7 +20,6 @@ def index():
     return render_template("index.html")
 
 @app.route("/ocr", methods=["POST"])
-@app.route("/ocr", methods=["POST"])
 def ocr():
     if "photo" not in request.files:
         return jsonify({"text": "No file uploaded"}), 400
@@ -54,6 +53,9 @@ def ocr():
 
     return jsonify({"text": text})
 
+@app.route("/credits")
+def credits():
+    return jsonify({"credits": "Juan Sandoval, Vika Sakman, Piha Patel, Alka Lakadia"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)
