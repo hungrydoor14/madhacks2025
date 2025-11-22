@@ -3,6 +3,7 @@ import pytesseract
 import os
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import numpy as np
+from tts_service import TTSService
 import re
 
 # IMPORTANT: Set Tesseract path (use your actual path)
