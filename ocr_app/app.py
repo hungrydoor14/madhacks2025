@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import pytesseract
 import numpy as np
+from tts_service import TTSService
 
 # IMPORTANT: Set Tesseract path (use your actual path)
 pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
