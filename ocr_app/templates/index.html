@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OCR Reader</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #preview { width: 100%; max-width: 350px; margin-top: 20px; }
+    #result { white-space: pre-wrap; background: #eee; padding: 10px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+<h2>📸 Take Photo for OCR</h2>
+
+<form id="uploadForm">
+    <input type="file" name="photo" id="photoInput" accept="image/*" capture="camera">
+    <button type="submit">Upload & Read</button>
+</form>
+
+<img id="preview">
+<pre id="result"></pre>
+
+<button id="speakBtn" style="display:none;">🔊 Read Aloud</button>
+
+<script>
+document.getElementById("photoInput").onchange = (e) => {
+  document.getElementById("preview").src = URL.createObjectURL(e.target.files[0]);
+};
+
+document.getElementById("uploadForm").onsubmit = async (e) => {
+  e.preventDefault();
+
+  const file = document.getElementById("photoInput").files[0];
+  if (!file) return alert("Please take a photo");
+
+  const formData = new FormData();
+  formData.append("photo", file);
+
+  const res = await fetch("/ocr", { method: "POST", body: formData });
+  const data = await res.json();
+
+  document.getElementById("result").textContent = data.text;
+  document.getElementById("speakBtn").style.display = "block";
+};
+
+document.getElementById("speakBtn").onclick = () => {
+  const text = document.getElementById("result").textContent;
+  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+};
+</script>
+
+</body>
+</html>
+
