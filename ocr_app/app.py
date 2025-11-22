@@ -5,6 +5,7 @@ from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import numpy as np
 from tts_service import TTSService
 import re
+import cv2
 
 # IMPORTANT: Set Tesseract path (use your actual path)
 pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
@@ -45,6 +46,9 @@ def ocr():
 
     # Convert to grayscale
     image = image.convert("L")
+
+    # remove tilt to images
+    image = deskew(image)
 
     # Detect black backgrounds on white text
     image = auto_invert(image)
@@ -102,6 +106,30 @@ def manual_replacement(text):
 
     return t
 
+def deskew(pil_img):
+    img = np.array(pil_img)
+
+    # If grayscale, skip color conversion
+    if len(img.shape) == 2:
+        gray = img
+    else:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    coords = np.column_stack(np.where(gray < 255))
+    angle = cv2.minAreaRect(coords)[-1]
+
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+
+    (h, w) = img.shape[:2]
+    M = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
+    rotated = cv2.warpAffine(img, M, (w, h),
+                             flags=cv2.INTER_CUBIC,
+                             borderMode=cv2.BORDER_REPLICATE)
+
+    return Image.fromarray(rotated)
 
 @app.route("/credits")
 def credits():
