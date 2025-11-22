@@ -13,10 +13,15 @@
 
 <h2>📸 Take Photo for OCR</h2>
 
-<form id="uploadForm">
-    <input type="file" name="photo" id="photoInput" accept="image/*" capture="camera">
-    <button type="submit">Upload & Read</button>
-</form>
+<!-- Choose File Button -->
+<input type="file" id="filePicker" accept="image/*" style="display:none;">
+<button id="chooseFileBtn">Choose File</button>
+
+<!-- Open Camera Button -->
+<input type="file" id="cameraPicker" accept="image/*" capture="camera" style="display:none;">
+<button id="cameraBtn">Open Camera</button>
+
+<button id="uploadBtn" disabled>Upload & Read</button>
 
 <img id="preview">
 <pre id="result"></pre>
@@ -24,18 +29,36 @@
 <button id="speakBtn" style="display:none;">🔊 Read Aloud</button>
 
 <script>
-document.getElementById("photoInput").onchange = (e) => {
-  document.getElementById("preview").src = URL.createObjectURL(e.target.files[0]);
+let selectedFile = null;
+
+// ---- Choose file from storage ----
+document.getElementById("chooseFileBtn").onclick = () => {
+  document.getElementById("filePicker").click();
 };
 
-document.getElementById("uploadForm").onsubmit = async (e) => {
-  e.preventDefault();
+document.getElementById("filePicker").onchange = (e) => {
+  selectedFile = e.target.files[0];
+  document.getElementById("preview").src = URL.createObjectURL(selectedFile);
+  document.getElementById("uploadBtn").disabled = false;
+};
 
-  const file = document.getElementById("photoInput").files[0];
-  if (!file) return alert("Please take a photo");
+// ---- Open camera ----
+document.getElementById("cameraBtn").onclick = () => {
+  document.getElementById("cameraPicker").click();
+};
+
+document.getElementById("cameraPicker").onchange = (e) => {
+  selectedFile = e.target.files[0];
+  document.getElementById("preview").src = URL.createObjectURL(selectedFile);
+  document.getElementById("uploadBtn").disabled = false;
+};
+
+// ---- Upload to Flask ----
+document.getElementById("uploadBtn").onclick = async () => {
+  if (!selectedFile) return alert("No image selected!");
 
   const formData = new FormData();
-  formData.append("photo", file);
+  formData.append("photo", selectedFile);
 
   const res = await fetch("/ocr", { method: "POST", body: formData });
   const data = await res.json();
@@ -44,6 +67,7 @@ document.getElementById("uploadForm").onsubmit = async (e) => {
   document.getElementById("speakBtn").style.display = "block";
 };
 
+// ---- Read aloud ----
 document.getElementById("speakBtn").onclick = () => {
   const text = document.getElementById("result").textContent;
   speechSynthesis.speak(new SpeechSynthesisUtterance(text));
@@ -52,4 +76,3 @@ document.getElementById("speakBtn").onclick = () => {
 
 </body>
 </html>
-
