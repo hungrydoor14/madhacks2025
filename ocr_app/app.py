@@ -1,10 +1,9 @@
 from flask import Flask, request, render_template, jsonify
 import pytesseract
 import os
-from flask import Flask, request, jsonify
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
-import pytesseract
 import numpy as np
+import re
 
 # IMPORTANT: Set Tesseract path (use your actual path)
 pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
@@ -50,8 +49,15 @@ def ocr():
     image = image.point(lambda x: 0 if x < 140 else 255)
 
     text = pytesseract.image_to_string(image)
+    cleaned_text = clean_text(text)
 
-    return jsonify({"text": text})
+    return jsonify({"text": cleaned_text})
+
+def clean_text(t):
+    t = t.replace("\n\n", "\n")          # collapse blank lines
+    t = re.sub(r"[ \t]+", " ", t)       # collapse spaces
+    t = t.strip()                       
+    return t
 
 @app.route("/credits")
 def credits():
