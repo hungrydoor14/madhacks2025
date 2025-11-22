@@ -6,3 +6,6 @@ numpy<2.0
 opencv-python-headless
 requests
 python-dotenv
+easyocr
+pyspellchecker
+scipy

@@ -7,6 +7,23 @@ import numpy as np
 import re
 import requests
 from dotenv import load_dotenv
+import cv2
+import ssl
+from spellchecker import SpellChecker
+
+# SSL context for EasyOCR downloads
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Initialize EasyOCR reader
+try:
+    import easyocr
+    easy_reader = easyocr.Reader(['en'])
+except Exception as e:
+    print(f"Warning: EasyOCR not available: {e}")
+    easy_reader = None
+
+# Initialize spell checker
+spell = SpellChecker()
 
 # Load environment variables from .env file (in parent directory)
 # Try multiple paths to find .env file
@@ -63,8 +80,17 @@ def ocr():
         if max(image.size) > MAX_SIZE:
             image.thumbnail((MAX_SIZE, MAX_SIZE))
 
-        # Convert to grayscale
+        # ---- HANDWRITING OR PRINTED? ----
+        if looks_handwritten(image) and easy_reader:
+            # Use EasyOCR for handwriting
+            text = run_easyocr(image)
+            cleaned_text = clean_text(text)
+            cleaned_text = spell_fix(cleaned_text)
+            return jsonify({"text": cleaned_text})
+
+        # ---- PRINTED TEXT (TESSERACT PATH) ----
         image = image.convert("L")
+        image = auto_invert(image)
 
         # Boost contrast
         enhancer = ImageEnhance.Contrast(image)
@@ -73,11 +99,9 @@ def ocr():
         # Optional: sharpen
         image = image.filter(ImageFilter.SHARPEN)
 
-        # Optional: threshold (black/white)
-        image = image.point(lambda x: 0 if x < 140 else 255)
-
         text = pytesseract.image_to_string(image)
-        cleaned_text = clean_text(text)
+        cleaned_text = manual_replacement(clean_text(text))
+        cleaned_text = spell_fix(cleaned_text)
         
         # Return empty string if no text found, but still return success
         if not cleaned_text:
@@ -93,6 +117,103 @@ def clean_text(t):
     t = re.sub(r"[ \t]+", " ", t)       # collapse spaces
     t = t.strip()                       
     return t
+
+def auto_invert(img):
+    """Auto-invert dark images for better OCR"""
+    gray = np.array(img.convert("L"))
+    mean = gray.mean()
+
+    # Threshold: below 100 means mostly dark image
+    if mean < 100:
+        return ImageOps.invert(img)
+    return img
+
+def manual_replacement(text):
+    """Fix common OCR errors"""
+    if not text:
+        return ""
+
+    t = text
+
+    # 0 mistaken for o
+    t = re.sub(r'(?<=t)0', 'o', t)  # t0 -> to
+    t = re.sub(r'(?<=T)0', 'o', t)
+
+    # + mistaken for t (OCR sees the cross)
+    t = re.sub(r'\+', 't', t)
+
+    # Replace | when used as a standalone word
+    t = re.sub(r"\b\|\b", "I", t)
+
+    # Replace | at the start of a sentence
+    t = re.sub(r"^\|\s", "I ", t)
+
+    # Replace | after punctuation like . ? !
+    t = re.sub(r"(?<=[\.\!\?]\s)\|(?=\s)", "I", t)
+
+    # Replace | between spaces (very common in OCR)
+    t = re.sub(r"\s\|\s", " I ", t)
+
+    # Replace | used inside words (rare)
+    t = re.sub(r"(?<=[A-Za-z])\|(?=[A-Za-z])", "I", t)
+
+    return t
+
+def looks_handwritten(pil_img):
+    """Detect if image contains handwriting vs printed text"""
+    try:
+        img = np.array(pil_img)
+        # Handle grayscale images
+        if len(img.shape) == 2:
+            gray = img
+        else:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+        # Use edges to estimate structure
+        edges = cv2.Canny(gray, 30, 150)
+        edge_density = edges.mean()
+
+        # Handwriting tends to have FAR fewer sharp edges than printed text
+        return edge_density < 5
+    except Exception as e:
+        print(f"Error in looks_handwritten: {e}")
+        return False  # Default to printed text if detection fails
+
+def run_easyocr(pil_img):
+    """Run EasyOCR on image"""
+    if not easy_reader:
+        return ""
+    try:
+        img = np.array(pil_img)
+        results = easy_reader.readtext(img, detail=0)
+        return " ".join(results)
+    except Exception as e:
+        print(f"EasyOCR error: {e}")
+        return ""
+
+def spell_fix(text):
+    """Fix spelling errors while protecting ordinals"""
+    if not text:
+        return ""
+    
+    corrected = []
+    for word in text.split():
+        # If it's an ordinal like "2nd", DO NOT CORRECT
+        if protect_ordinals(word):
+            corrected.append(word)
+            continue
+
+        # Normal spellcheck
+        fixed = spell.correction(word)
+        corrected.append(fixed if fixed else word)
+    return " ".join(corrected)
+
+def protect_ordinals(word):
+    """Protect ordinal numbers from spell correction"""
+    # Match patterns like 1st, 2nd, 3rd, 4th, 21st, 33rd, 100th
+    if re.fullmatch(r"\d+(st|nd|rd|th)", word.lower()):
+        return True
+    return False
 
 @app.route("/api/enhanced", methods=["POST"])
 def enhanced():
