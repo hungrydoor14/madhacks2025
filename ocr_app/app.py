@@ -3,7 +3,7 @@ import pytesseract
 import os
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import numpy as np
-import re
+from tts_service import TTSService
 
 # IMPORTANT: Set Tesseract path (use your actual path)
 pytesseract.pytesseract.tesseract_cmd = "/opt/homebrew/bin/tesseract"
