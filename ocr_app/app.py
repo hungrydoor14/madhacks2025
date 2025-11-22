@@ -55,7 +55,7 @@ def ocr():
 
 @app.route("/credits")
 def credits():
-    return jsonify({"credits": "Juan Sandoval, Vika Sakman, Piha Patel, Alka Lakadia"})
+    return render_template("credits.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)

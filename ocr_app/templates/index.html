@@ -28,10 +28,17 @@
 
 <button id="speakBtn" style="display:none;">Read aloud WIP STILL NOT WORKING</button>
 
+
 <script>
 let selectedFile = null;
 
 async function checkCamera() {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // Always show camera on mobile — capture="camera" works
+  if (isMobile) return;
+
+  // Desktop detection
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     document.getElementById("cameraBtn").style.display = "none";
     return;
@@ -87,6 +94,7 @@ document.getElementById("speakBtn").onclick = () => {
   const text = document.getElementById("result").textContent;
   speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 };
+
 </script>
 
 </body>
