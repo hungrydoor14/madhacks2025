@@ -11,19 +11,6 @@ import cv2
 import ssl
 from spellchecker import SpellChecker
 
-# SSL context for EasyOCR downloads
-ssl._create_default_https_context = ssl._create_unverified_context
-
-# Initialize EasyOCR reader
-try:
-    import easyocr
-    easy_reader = easyocr.Reader(['en'])
-    print(easy_reader)
-
-except Exception as e:
-    print(f"Warning: EasyOCR not available: {e}")
-    easy_reader = None
-
 # Initialize spell checker
 spell = SpellChecker()
 
@@ -82,26 +69,11 @@ def ocr():
         if max(image.size) > MAX_SIZE:
             image.thumbnail((MAX_SIZE, MAX_SIZE))
 
-<<<<<<< Updated upstream
-        # ---- HANDWRITING OR PRINTED? ----
-        if looks_handwritten(image) and easy_reader:
-            # Use EasyOCR for handwriting
-            text = run_easyocr(image)
-            cleaned_text = clean_text(text)
-            cleaned_text = spell_fix(cleaned_text)
-            return jsonify({"text": cleaned_text})
-
-=======
->>>>>>> Stashed changes
         # ---- PRINTED TEXT (TESSERACT PATH) ----
         image = image.convert("L")
 
         # Optional: sharpen
         image = image.filter(ImageFilter.SHARPEN)
-<<<<<<< Updated upstream
-        print("test")
-=======
->>>>>>> Stashed changes
 
         # invert if its black background on white text
         image = auto_invert(image)
@@ -113,6 +85,7 @@ def ocr():
         text = pytesseract.image_to_string(image)
         cleaned_text = manual_replacement(clean_text(text))
         cleaned_text = spell_fix(cleaned_text)
+        cleaned_text = add_missing_punctuation(cleaned_text)
         
         # Return empty string if no text found, but still return success
         if not cleaned_text:
@@ -124,8 +97,10 @@ def ocr():
         return jsonify({"text": "", "error": str(e)}), 500
 
 def clean_text(t):
-    t = t.replace("\n\n", "\n")          # collapse blank lines
-    t = re.sub(r"[ \t]+", " ", t)       # collapse spaces
+    # Preserve punctuation and line structure
+    t = t.replace("\n\n", "\n")          # collapse blank lines only
+    t = re.sub(r"[ \t]+", " ", t)       # collapse multiple spaces/tabs to single space
+    # Don't remove punctuation - just clean up whitespace
     t = t.strip()                       
     return t
 
@@ -191,20 +166,37 @@ def looks_handwritten(pil_img):
         return False  # Default to printed text if detection fails
 
 def spell_fix(text):
-    """Fix spelling errors while protecting ordinals"""
+    """Fix spelling errors while protecting ordinals and preserving punctuation"""
     if not text:
         return ""
     
+    # Split text into words with punctuation, preserving both
+    # This regex finds all non-whitespace sequences (words + punctuation)
+    words = re.findall(r'\S+', text)
+    
     corrected = []
-    for word in text.split():
+    for word_punct in words:
+        # Extract the actual word (alphanumeric part) and punctuation
+        word_match = re.match(r'^([\w\'-]+)', word_punct)
+        if not word_match:
+            # No word found, it's just punctuation - keep as-is
+            corrected.append(word_punct)
+            continue
+        
+        word = word_match.group(1)
+        punctuation = word_punct[len(word):]  # Everything after the word
+        
         # If it's an ordinal like "2nd", DO NOT CORRECT
         if protect_ordinals(word):
-            corrected.append(word)
+            corrected.append(word_punct)
             continue
 
-        # Normal spellcheck
+        # Normal spellcheck for the word only
         fixed = spell.correction(word)
-        corrected.append(fixed if fixed else word)
+        # Reconstruct with original punctuation
+        corrected.append((fixed if fixed else word) + punctuation)
+    
+    # Join with spaces (original spacing is preserved by the \S+ pattern)
     return " ".join(corrected)
 
 def protect_ordinals(word):
@@ -213,6 +205,68 @@ def protect_ordinals(word):
     if re.fullmatch(r"\d+(st|nd|rd|th)", word.lower()):
         return True
     return False
+
+def add_missing_punctuation(text):
+    """Intelligently add missing punctuation to text (subtle, natural)"""
+    if not text or len(text.strip()) == 0:
+        return text
+    
+    # Don't modify if text already has good punctuation coverage
+    # Check if text has reasonable punctuation density
+    punctuation_count = len(re.findall(r'[.!?,;:]', text))
+    word_count = len(re.findall(r'\b\w+\b', text))
+    
+    # If punctuation density is reasonable (at least 1 per 20 words), don't add
+    if word_count > 0 and punctuation_count / word_count > 0.05:
+        return text
+    
+    lines = text.split('\n')
+    result_lines = []
+    
+    for line in lines:
+        if not line.strip():
+            result_lines.append(line)
+            continue
+        
+        line = line.strip()
+        
+        # Only add period at end if line doesn't end with punctuation
+        # Be conservative - only add to longer, complete-looking sentences
+        if line and not line[-1] in '.!?;:':
+            if line[-1].isalnum():
+                words = line.split()
+                # Only add period to sentences with 4+ words that look complete
+                if len(words) >= 4:
+                    # Don't add period if it ends with common connecting words
+                    ending_words = ['the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 
+                                   'have', 'has', 'had', 'will', 'would', 'should', 'could', 'can', 'may',
+                                   'to', 'for', 'with', 'from', 'at', 'in', 'on']
+                    if words[-1].lower() not in ending_words:
+                        line += '.'
+        
+        # Add question mark for question words at start (only if clearly a question)
+        question_words = ['what', 'where', 'when', 'who', 'why', 'how', 'which', 'whose']
+        words = line.split()
+        if words and words[0].lower() in question_words and not line.endswith('?'):
+            # Only if it's a proper question (has verb or is short)
+            if len(words) <= 8 or any(w in words for w in ['is', 'are', 'was', 'were', 'do', 'does', 'did', 'will', 'can', 'should']):
+                if not line.endswith('.'):
+                    line = line.rstrip('.') + '?'
+                else:
+                    line = line[:-1] + '?'
+        
+        result_lines.append(line)
+    
+    result = '\n'.join(result_lines)
+    
+    # Final cleanup: ensure proper spacing around punctuation
+    result = re.sub(r'\s+([.!?,;:])', r'\1', result)  # Remove space before punctuation
+    result = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', result)  # Ensure space after sentence end
+    
+    # DO NOT add dashes - they look too AI-generated
+    # Preserve any existing dashes but don't add new ones
+    
+    return result
 
 @app.route("/api/enhanced", methods=["POST"])
 def enhanced():
