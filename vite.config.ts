@@ -13,7 +13,13 @@ export default defineConfig({
     },
   },
   server: {
+    host: "0.0.0.0",
     port: 5173,
+    allowedHosts: [
+      "10.140.209.0",   // your LAN IP
+      "localhost",
+      "127.0.0.1"
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:5001',
