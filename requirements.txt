@@ -1,11 +1,10 @@
-flask 
+flask
 flask-cors
-pytesseract 
 pillow
 numpy<2.0
 opencv-python-headless
 requests
 python-dotenv
-easyocr
 pyspellchecker
-scipy
+openai
+fishaudio
