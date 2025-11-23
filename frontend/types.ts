@@ -12,6 +12,7 @@ export interface Entry {
   imageUrl: string | null;
   voiceFile: File | null;
   voiceFileUrl: string | null;
+  voiceId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

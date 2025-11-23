@@ -12,6 +12,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [voiceFileUrl, setVoiceFileUrl] = useState<string | null>(null);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -64,6 +65,7 @@ function App() {
         imageUrl: previewUrl,
         voiceFile: voiceFile,
         voiceFileUrl: voiceFileUrl,
+        voiceId: voiceId,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -91,10 +93,31 @@ function App() {
     setPreviewUrl(null);
   };
 
-  const handleVoiceUpload = (file: File) => {
+  const handleVoiceUpload = async (file: File) => {
     setVoiceFile(file);
     const url = URL.createObjectURL(file);
     setVoiceFileUrl(url);
+    
+    // Upload voice file to backend
+    try {
+      const formData = new FormData();
+      formData.append("voice", file);
+      
+      const res = await fetch("/api/upload-voice", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setVoiceId(data.voiceId);
+        console.log("Voice file uploaded:", data.voiceId);
+      } else {
+        console.error("Failed to upload voice file");
+      }
+    } catch (error) {
+      console.error("Error uploading voice file:", error);
+    }
   };
 
   const currentEntry = currentEntryId ? entries.find(e => e.id === currentEntryId) : null;
@@ -113,6 +136,7 @@ function App() {
       setCurrentEntryId(entryId);
       setVoiceFile(entry.voiceFile);
       setVoiceFileUrl(entry.voiceFileUrl);
+      setVoiceId(entry.voiceId || null);
       setShowEntryScreen(true);
     }
   };
@@ -120,6 +144,7 @@ function App() {
   const handleNewEntry = () => {
     setVoiceFile(null);
     setVoiceFileUrl(null);
+    setVoiceId(null);
     setCurrentEntryId(null);
     setShowEntryScreen(false);
     setShowPreview(false);
@@ -137,6 +162,7 @@ function App() {
         entries={entries}
         voiceFile={voiceFile}
         voiceFileUrl={voiceFileUrl}
+        voiceId={voiceId}
         onEntryUpdate={handleEntryUpdate}
         onEntrySelect={handleEntrySelect}
         onNewEntry={handleNewEntry}
