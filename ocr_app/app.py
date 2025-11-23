@@ -109,8 +109,13 @@ def ocr():
         # OEM 3 = Default OCR engine mode
         # Whitelist includes all letters, numbers, and common punctuation marks
         # This helps Tesseract recognize punctuation marks that might be missed
-        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,!?;:()[]{}\'"-–—/\\@#$%&*+=<>|~`_'
-        text = pytesseract.image_to_string(image, config=custom_config)
+        custom_config = (
+            r'--oem 3 --psm 6 '
+            r'-c tessedit_char_whitelist='
+            r'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            r'.,!?;:()[]{}\'-–—/\\@#$%&*+=<>|~`_'
+        )
+        text = pytesseract.image_to_string(image)
         cleaned_text = manual_replacement(clean_text(text))
         cleaned_text = spell_fix(cleaned_text)
         cleaned_text = add_missing_punctuation(cleaned_text)
