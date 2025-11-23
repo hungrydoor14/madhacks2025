@@ -537,7 +537,13 @@ def generate_audio():
         use_custom_voice = data.get("useCustomVoice", False)
         
         # Debug logging
-        print(f"Audio generation request: use_custom_voice={use_custom_voice}, voice_id={voice_id}, text_length={len(text) if text else 0}")
+        print(f"\n{'='*50}")
+        print(f"AUDIO GENERATION REQUEST RECEIVED")
+        print(f"{'='*50}")
+        print(f"use_custom_voice: {use_custom_voice} (type: {type(use_custom_voice).__name__})")
+        print(f"voice_id: {voice_id} (type: {type(voice_id).__name__ if voice_id else 'None'})")
+        print(f"text_length: {len(text) if text else 0}")
+        print(f"{'='*50}\n")
         
         if not text:
             return jsonify({"error": "No text provided"}), 400
@@ -587,6 +593,14 @@ def generate_audio():
         # If custom voice was requested, don't allow fallback to default
         use_default_voice_param = not use_custom_voice
         
+        print(f"\n{'='*50}")
+        print(f"CALLING TTS SERVICE")
+        print(f"{'='*50}")
+        print(f"use_default_voice: {use_default_voice_param}")
+        print(f"voice_file_path: {voice_file_path}")
+        print(f"use_custom_voice was: {use_custom_voice}")
+        print(f"{'='*50}\n")
+        
         try:
             output_path = tts.generate_audio(
                 text=text,
@@ -629,6 +643,9 @@ def generate_audio():
         
         # Return the audio file URL
         audio_filename = os.path.basename(output_path)
+        
+        # Always return relative path - frontend will handle network access
+        # The frontend will convert to absolute URL if needed for mobile
         audio_url = f"/uploads/audio/{audio_filename}"
         
         print(f"Audio generated successfully: {output_path}")

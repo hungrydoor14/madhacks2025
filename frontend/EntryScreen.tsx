@@ -40,7 +40,14 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
   
   // Use voiceId from entry if available, otherwise use prop
   // Priority: entry.voiceId > voiceId prop
-  const activeVoiceId = entry.voiceId || voiceId;
+  // Also check if voiceFile exists - if it does, we should have a voiceId somewhere
+  let activeVoiceId = entry.voiceId || voiceId;
+  
+  // If we have a voiceFile but no voiceId, try to get it from the entry or prop
+  if (voiceFile && !activeVoiceId) {
+    // Voice file exists but no ID - this shouldn't happen, but log it
+    console.warn("Voice file exists but no voiceId found", { entryVoiceId: entry.voiceId, propVoiceId: voiceId });
+  }
   
   // Debug: Log voice-related state when it changes
   useEffect(() => {
@@ -191,7 +198,13 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
     try {
       const currentSelectedVoice = selectedVoice;
       const currentActiveVoiceId = activeVoiceId;
-      const useCustomVoice = currentSelectedVoice === 'custom' && currentActiveVoiceId !== null;
+      
+      // Determine if we should use custom voice
+      // Must have both: custom selected AND a valid voiceId
+      const useCustomVoice = currentSelectedVoice === 'custom' && 
+                            currentActiveVoiceId !== null && 
+                            currentActiveVoiceId !== undefined &&
+                            currentActiveVoiceId !== '';
       
       // Debug logging
       console.log("Audio Generation Debug:", {
@@ -201,9 +214,11 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
         entryVoiceId: entry.voiceId,
         propVoiceId: voiceId,
         useCustomVoice,
+        hasVoiceFile: !!voiceFile,
         textLength: textToSpeak.length
       });
       
+      // Only check for voice file if custom is selected
       if (currentSelectedVoice === 'custom' && !currentActiveVoiceId) {
         alert("No voice file found. Please upload a voice file first.");
         setIsGeneratingAudio(false);
@@ -216,10 +231,15 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
         useCustomVoice: useCustomVoice
       };
       
-      console.log("Sending audio generation request:", {
-        ...requestBody,
-        text: textToSpeak.substring(0, 100) + "..."
+      console.log("=== SENDING AUDIO REQUEST ===");
+      console.log("Request body:", {
+        textLength: textToSpeak.length,
+        voiceId: currentActiveVoiceId,
+        useCustomVoice: useCustomVoice,
+        selectedVoice: currentSelectedVoice,
+        hasActiveVoiceId: !!currentActiveVoiceId
       });
+      console.log("=============================");
       
       const res = await fetch("/api/generate-audio", {
         method: "POST",
@@ -246,7 +266,25 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
         throw new Error(errorMsg);
       }
       
-      const newAudioUrl = data.audioUrl;
+      let newAudioUrl = data.audioUrl;
+      
+      // Fix URL for mobile/network access
+      // If URL is relative, convert to absolute URL pointing to Flask backend
+      if (newAudioUrl && newAudioUrl.startsWith('/')) {
+        const protocol = window.location.protocol;
+        const hostname = window.location.hostname;
+        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+        
+        // For network/mobile access, use Flask backend port (5001)
+        // For localhost, use relative path (proxy handles it)
+        if (!isLocalhost) {
+          // Network access - use Flask backend directly
+          newAudioUrl = `${protocol}//${hostname}:5001${newAudioUrl}`;
+          console.log("Converted audio URL for network access:", newAudioUrl);
+        } else {
+          console.log("Using relative audio URL (localhost):", newAudioUrl);
+        }
+      }
       
       if (newAudioUrl) {
         console.log("Setting audio URL:", newAudioUrl);
