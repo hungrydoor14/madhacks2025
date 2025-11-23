@@ -8,4 +8,4 @@ dist
 *.log
 uploads/*
 !uploads/.gitkeep
-.wav
+*.wav
