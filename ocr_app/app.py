@@ -11,6 +11,19 @@ import cv2
 import ssl
 from spellchecker import SpellChecker
 
+# SSL context for EasyOCR downloads
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Initialize EasyOCR reader
+try:
+    import easyocr
+    easy_reader = easyocr.Reader(['en'])
+    print(easy_reader)
+
+except Exception as e:
+    print(f"Warning: EasyOCR not available: {e}")
+    easy_reader = None
+
 # Initialize spell checker
 spell = SpellChecker()
 
@@ -75,6 +88,8 @@ def ocr():
         # Optional: sharpen
         image = image.filter(ImageFilter.SHARPEN)
 
+        print("test")
+
         # invert if its black background on white text
         image = auto_invert(image)
 
@@ -124,6 +139,8 @@ def manual_replacement(text):
     # 0 mistaken for o
     t = re.sub(r'(?<=t)0', 'o', t)  # t0 -> to
     t = re.sub(r'(?<=T)0', 'o', t)
+
+    t = re.sub(r"@", "a", t)
 
     # + mistaken for t (OCR sees the cross)
     t = re.sub(r'\+', 't', t)
