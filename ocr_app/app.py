@@ -11,18 +11,9 @@ import cv2
 import ssl
 from spellchecker import SpellChecker
 
-# SSL context for EasyOCR downloads
-ssl._create_default_https_context = ssl._create_unverified_context
-
-# Initialize EasyOCR reader
-try:
-    import easyocr
-    easy_reader = easyocr.Reader(['en'])
-    print(easy_reader)
-
-except Exception as e:
-    print(f"Warning: EasyOCR not available: {e}")
-    easy_reader = None
+# Force-load .env from project root (parent of ocr_app)
+ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
+load_dotenv(ENV_PATH)
 
 # Initialize spell checker
 spell = SpellChecker()
@@ -97,16 +88,24 @@ def ocr():
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(1.4)
 
+        # ---- RAW TESSERACT OUTPUT ----
         text = pytesseract.image_to_string(image)
-        cleaned_text = manual_replacement(clean_text(text))
-        cleaned_text = spell_fix(cleaned_text)
-        cleaned_text = add_missing_punctuation(cleaned_text)
-        
-        # Return empty string if no text found, but still return success
-        if not cleaned_text:
+
+        # light cleaning before sending to Claude 
+        basic = manual_replacement(clean_text(text))
+
+        print("Sending to Claude cleanup...")
+
+        # ---- CLAUDE OCR CLEANUP (GUESSING / FIXING OCR ERRORS) ----
+        cleaned_text = claude_ocr_cleanup(basic)
+
+        # Return fallback if nothing extracted
+        if not cleaned_text or not cleaned_text.strip():
             cleaned_text = "No text could be extracted from this image."
+
         print("TesseractOCR")
         return jsonify({"text": cleaned_text})
+
     except Exception as e:
         print(f"OCR Error: {str(e)}")
         return jsonify({"text": "", "error": str(e)}), 500
@@ -284,6 +283,52 @@ def add_missing_punctuation(text):
     # Preserve any existing dashes but don't add new ones
     
     return result
+
+def claude_ocr_cleanup(raw_text):
+    """Send raw/noisy OCR text to Claude to fix errors, reconstruct words, and infer intended text."""
+    try:
+        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not anthropic_api_key:
+            print("Missing Claude API key")
+            return raw_text  # fallback
+        
+        system_prompt = """
+You repair noisy OCR text. Your job is to reconstruct what the text was intended to say.
+
+Rules:
+- Fix misread characters (l ↔ I ↔ 1, 0 ↔ O, rn ↔ m, etc.)
+- Fix spacing, punctuation, line breaks.
+- Reconstruct broken/missing words using context.
+- Remove garbage characters.
+- You ARE allowed to infer what the intended English text was.
+- Output clean, natural English.
+"""
+
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": anthropic_api_key,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
+            },
+            json={
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 2000,
+                "system": system_prompt,
+                "messages": [
+                    {"role": "user", "content": raw_text}
+                ]
+            }
+        )
+
+        data = response.json()
+        return data.get("content", [{}])[0].get("text", raw_text)
+
+    except Exception as e:
+        print("Claude cleanup error:", e)
+        return raw_text
+
+
 
 @app.route("/api/enhanced", methods=["POST"])
 def enhanced():
