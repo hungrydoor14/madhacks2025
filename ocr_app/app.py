@@ -1,22 +1,19 @@
 from flask import Flask, request, render_template, jsonify, send_from_directory
 from flask_cors import CORS
-import pytesseract
 import os
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import numpy as np
 import re
 import requests
 from dotenv import load_dotenv
-import cv2
-import ssl
-from spellchecker import SpellChecker
+
+from openai import OpenAI
+import base64
 
 # Force-load .env from project root (parent of ocr_app)
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
 load_dotenv(ENV_PATH)
-
-# Initialize spell checker
-spell = SpellChecker()
+client = OpenAI()
 
 # Load environment variables from .env file (in parent directory)
 # Try multiple paths to find .env file
@@ -32,10 +29,6 @@ for env_path in env_paths:
 else:
     # Fallback: try loading from current directory
     load_dotenv()
-
-# IMPORTANT: Set Tesseract path (use your actual path or environment variable)
-tesseract_path = os.getenv("TESSERACT_CMD", "/opt/homebrew/bin/tesseract")
-pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 app = Flask(__name__, static_folder="../dist", static_url_path="")
 app.debug = True
@@ -56,77 +49,47 @@ def index():
 def ocr():
     try:
         if "photo" not in request.files:
-            return jsonify({"text": "No file uploaded", "error": "No file uploaded"}), 400
+            return jsonify({"text": "No file uploaded"}), 400
 
         file = request.files["photo"]
-        
-        if file.filename == '':
-            return jsonify({"text": "", "error": "No file selected"}), 400
 
-        image = Image.open(file)
+        if file.filename == "":
+            return jsonify({"text": "No file selected"}), 400
 
-        # Fix rotation
-        image = ImageOps.exif_transpose(image)
+        # ---- READ IMAGE BYTES FROM UPLOAD ----
+        img_bytes = file.read()
 
-        # Resize large images
-        MAX_SIZE = 1500
-        if max(image.size) > MAX_SIZE:
-            image.thumbnail((MAX_SIZE, MAX_SIZE))
+        # ---- BASE64 ENCODE ----
+        import base64
+        b64_image = base64.b64encode(img_bytes).decode("utf-8")
 
-        # ---- PRINTED TEXT (TESSERACT PATH) ----
-        image = image.convert("L")
+        print("Sending to GPT-4.1 with data:image/... base64…")
 
-        # Optional: sharpen
-        image = image.filter(ImageFilter.SHARPEN)
+        # ---- VISION REQUEST USING EXACT SYNTAX YOU PROVIDED ----
+        response = client.responses.create(
+            model="gpt-4.1",
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "input_text", "text": "Transcribe every readable word in this image. DO NOT ADD ANYTHING ELSE, AND RESPOND ONLY WITH THE READABLE SENTENCE OR SENTENCES." },
+                        {
+                            "type": "input_image",
+                            "image_url": f"data:image/jpeg;base64,{b64_image}",
+                        },
+                    ],
+                }
+            ],
+        )
 
-        print("test")
+        # ---- EXTRACT TEXT ----
+        out = response.output_text
 
-        # invert if its black background on white text
-        image = auto_invert(image)
-
-        # Boost contrast
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(1.4)
-
-        # ---- RAW TESSERACT OUTPUT ----
-        text = pytesseract.image_to_string(image)
-
-        # light cleaning before sending to Claude 
-        basic = manual_replacement(clean_text(text))
-
-        print("Sending to Claude cleanup...")
-
-        # ---- CLAUDE OCR CLEANUP (GUESSING / FIXING OCR ERRORS) ----
-        cleaned_text = claude_ocr_cleanup(basic)
-
-        # Return fallback if nothing extracted
-        if not cleaned_text or not cleaned_text.strip():
-            cleaned_text = "No text could be extracted from this image."
-
-        print("TesseractOCR")
-        return jsonify({"text": cleaned_text})
+        return jsonify({"text": out})
 
     except Exception as e:
-        print(f"OCR Error: {str(e)}")
-        return jsonify({"text": "", "error": str(e)}), 500
-
-def clean_text(t):
-    # Preserve punctuation and line structure
-    t = t.replace("\n\n", "\n")          # collapse blank lines only
-    t = re.sub(r"[ \t]+", " ", t)       # collapse multiple spaces/tabs to single space
-    # Don't remove punctuation - just clean up whitespace
-    t = t.strip()                       
-    return t
-
-def auto_invert(img):
-    """Auto-invert dark images for better OCR"""
-    gray = np.array(img.convert("L"))
-    mean = gray.mean()
-
-    # Threshold: below 100 means mostly dark image
-    if mean < 100:
-        return ImageOps.invert(img)
-    return img
+        print("OCR Error:", e)
+        return jsonify({"error": str(e)}), 500
 
 def manual_replacement(text):
     """Fix common OCR errors"""
@@ -160,176 +123,6 @@ def manual_replacement(text):
     t = re.sub(r"(?<=[A-Za-z])\|(?=[A-Za-z])", "I", t)
 
     return t
-
-def looks_handwritten(pil_img):
-    """Detect if image contains handwriting vs printed text"""
-    try:
-        img = np.array(pil_img)
-        # Handle grayscale images
-        if len(img.shape) == 2:
-            gray = img
-        else:
-            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-
-        # Use edges to estimate structure
-        edges = cv2.Canny(gray, 30, 150)
-        edge_density = edges.mean()
-
-        # Handwriting tends to have FAR fewer sharp edges than printed text
-        return edge_density < 10
-    except Exception as e:
-        print(f"Error in looks_handwritten: {e}")
-        return False  # Default to printed text if detection fails
-
-def spell_fix(text):
-    """Fix spelling errors while protecting ordinals and preserving punctuation"""
-    if not text:
-        return ""
-    
-    # Split text into words with punctuation, preserving both
-    # This regex finds all non-whitespace sequences (words + punctuation)
-    words = re.findall(r'\S+', text)
-    
-    corrected = []
-    for word_punct in words:
-        # Extract the actual word (alphanumeric part) and punctuation
-        word_match = re.match(r'^([\w\'-]+)', word_punct)
-        if not word_match:
-            # No word found, it's just punctuation - keep as-is
-            corrected.append(word_punct)
-            continue
-        
-        word = word_match.group(1)
-        punctuation = word_punct[len(word):]  # Everything after the word
-        
-        # If it's an ordinal like "2nd", DO NOT CORRECT
-        if protect_ordinals(word):
-            corrected.append(word_punct)
-            continue
-
-        # Normal spellcheck for the word only
-        fixed = spell.correction(word)
-        # Reconstruct with original punctuation
-        corrected.append((fixed if fixed else word) + punctuation)
-    
-    # Join with spaces (original spacing is preserved by the \S+ pattern)
-    return " ".join(corrected)
-
-def protect_ordinals(word):
-    """Protect ordinal numbers from spell correction"""
-    # Match patterns like 1st, 2nd, 3rd, 4th, 21st, 33rd, 100th
-    if re.fullmatch(r"\d+(st|nd|rd|th)", word.lower()):
-        return True
-    return False
-
-def add_missing_punctuation(text):
-    """Intelligently add missing punctuation to text (subtle, natural)"""
-    if not text or len(text.strip()) == 0:
-        return text
-    
-    # Don't modify if text already has good punctuation coverage
-    # Check if text has reasonable punctuation density
-    punctuation_count = len(re.findall(r'[.!?,;:]', text))
-    word_count = len(re.findall(r'\b\w+\b', text))
-    
-    # If punctuation density is reasonable (at least 1 per 20 words), don't add
-    if word_count > 0 and punctuation_count / word_count > 0.05:
-        return text
-    
-    lines = text.split('\n')
-    result_lines = []
-    
-    for line in lines:
-        if not line.strip():
-            result_lines.append(line)
-            continue
-        
-        line = line.strip()
-        
-        # Only add period at end if line doesn't end with punctuation
-        # Be conservative - only add to longer, complete-looking sentences
-        if line and not line[-1] in '.!?;:':
-            if line[-1].isalnum():
-                words = line.split()
-                # Only add period to sentences with 4+ words that look complete
-                if len(words) >= 4:
-                    # Don't add period if it ends with common connecting words
-                    ending_words = ['the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 
-                                   'have', 'has', 'had', 'will', 'would', 'should', 'could', 'can', 'may',
-                                   'to', 'for', 'with', 'from', 'at', 'in', 'on']
-                    if words[-1].lower() not in ending_words:
-                        line += '.'
-        
-        # Add question mark for question words at start (only if clearly a question)
-        question_words = ['what', 'where', 'when', 'who', 'why', 'how', 'which', 'whose']
-        words = line.split()
-        if words and words[0].lower() in question_words and not line.endswith('?'):
-            # Only if it's a proper question (has verb or is short)
-            if len(words) <= 8 or any(w in words for w in ['is', 'are', 'was', 'were', 'do', 'does', 'did', 'will', 'can', 'should']):
-                if not line.endswith('.'):
-                    line = line.rstrip('.') + '?'
-                else:
-                    line = line[:-1] + '?'
-        
-        result_lines.append(line)
-    
-    result = '\n'.join(result_lines)
-    
-    # Final cleanup: ensure proper spacing around punctuation
-    result = re.sub(r'\s+([.!?,;:])', r'\1', result)  # Remove space before punctuation
-    result = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', result)  # Ensure space after sentence end
-    
-    # DO NOT add dashes - they look too AI-generated
-    # Preserve any existing dashes but don't add new ones
-    
-    return result
-
-def claude_ocr_cleanup(raw_text):
-    """Send raw/noisy OCR text to Claude to fix errors, reconstruct words, and infer intended text."""
-    try:
-        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not anthropic_api_key:
-            print("Missing Claude API key")
-            return raw_text  # fallback
-        
-        system_prompt = """
-You repair noisy OCR text. Your job is to reconstruct what the text was intended to say.
-
-Rules:
-- Fix misread characters (l ↔ I ↔ 1, 0 ↔ O, rn ↔ m, etc.)
-- Fix spacing, punctuation, line breaks.
-- Reconstruct broken/missing words using context.
-- Remove garbage characters.
-- You ARE allowed to infer what the intended English text was.
-- Output clean, natural English.
-- YOU CANNOT EVER, EVER, EVER REPLY WITH MORE THAN JUST THE INFERRED TEXT. DO NOT EXPLAIN YOUR REASONING, JUST PROVIDED THE TEXT.
-"""
-
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": anthropic_api_key,
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
-            },
-            json={
-                "model": "claude-3-haiku-20240307",
-                "max_tokens": 2000,
-                "system": system_prompt,
-                "messages": [
-                    {"role": "user", "content": raw_text}
-                ]
-            }
-        )
-
-        data = response.json()
-        return data.get("content", [{}])[0].get("text", raw_text)
-
-    except Exception as e:
-        print("Claude cleanup error:", e)
-        return raw_text
-
-
 
 @app.route("/api/enhanced", methods=["POST"])
 def enhanced():
