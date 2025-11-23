@@ -669,7 +669,7 @@ def generate_audio():
 
 @app.route("/uploads/audio/<path:filename>")
 def serve_audio(filename):
-    """Serve generated audio files"""
+    """Serve generated audio files with CORS headers for mobile access"""
     try:
         file_path = os.path.join(AUDIO_FOLDER, filename)
         if not os.path.exists(file_path):
@@ -677,7 +677,14 @@ def serve_audio(filename):
             print(f"AUDIO_FOLDER: {AUDIO_FOLDER}")
             print(f"Files in AUDIO_FOLDER: {os.listdir(AUDIO_FOLDER) if os.path.exists(AUDIO_FOLDER) else 'Folder does not exist'}")
             return jsonify({"error": "Audio file not found"}), 404
-        return send_from_directory(AUDIO_FOLDER, filename)
+        
+        # Add CORS headers explicitly for audio files
+        response = send_from_directory(AUDIO_FOLDER, filename)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Content-Type', 'audio/wav')
+        return response
     except Exception as e:
         print(f"Error serving audio file: {str(e)}")
         return jsonify({"error": str(e)}), 500

@@ -43,10 +43,23 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
   // Also check if voiceFile exists - if it does, we should have a voiceId somewhere
   let activeVoiceId = entry.voiceId || voiceId;
   
+  // Debug: Always log voice state
+  console.log("Voice ID Resolution:", {
+    entryVoiceId: entry.voiceId,
+    propVoiceId: voiceId,
+    activeVoiceId: activeVoiceId,
+    hasVoiceFile: !!voiceFile,
+    entryId: entry.id
+  });
+  
   // If we have a voiceFile but no voiceId, try to get it from the entry or prop
   if (voiceFile && !activeVoiceId) {
     // Voice file exists but no ID - this shouldn't happen, but log it
-    console.warn("Voice file exists but no voiceId found", { entryVoiceId: entry.voiceId, propVoiceId: voiceId });
+    console.warn("⚠️ Voice file exists but no voiceId found!", { 
+      entryVoiceId: entry.voiceId, 
+      propVoiceId: voiceId,
+      entry: entry
+    });
   }
   
   // Debug: Log voice-related state when it changes
@@ -201,28 +214,35 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
       
       // Determine if we should use custom voice
       // Must have both: custom selected AND a valid voiceId
-      const useCustomVoice = currentSelectedVoice === 'custom' && 
-                            currentActiveVoiceId !== null && 
-                            currentActiveVoiceId !== undefined &&
-                            currentActiveVoiceId !== '';
+      const hasValidVoiceId = currentActiveVoiceId !== null && 
+                              currentActiveVoiceId !== undefined &&
+                              currentActiveVoiceId !== '';
+      const useCustomVoice = currentSelectedVoice === 'custom' && hasValidVoiceId;
       
-      // Debug logging
-      console.log("Audio Generation Debug:", {
-        selectedMode,
-        selectedVoice: currentSelectedVoice,
-        activeVoiceId: currentActiveVoiceId,
-        entryVoiceId: entry.voiceId,
-        propVoiceId: voiceId,
-        useCustomVoice,
-        hasVoiceFile: !!voiceFile,
-        textLength: textToSpeak.length
-      });
+      // Debug logging - ALWAYS log this to help debug
+      console.log("=== AUDIO GENERATION DEBUG ===");
+      console.log("selectedMode:", selectedMode);
+      console.log("selectedVoice:", currentSelectedVoice);
+      console.log("activeVoiceId:", currentActiveVoiceId);
+      console.log("entry.voiceId:", entry.voiceId);
+      console.log("prop voiceId:", voiceId);
+      console.log("hasValidVoiceId:", hasValidVoiceId);
+      console.log("useCustomVoice:", useCustomVoice);
+      console.log("hasVoiceFile:", !!voiceFile);
+      console.log("=============================");
       
       // Only check for voice file if custom is selected
-      if (currentSelectedVoice === 'custom' && !currentActiveVoiceId) {
-        alert("No voice file found. Please upload a voice file first.");
-        setIsGeneratingAudio(false);
-        return;
+      if (currentSelectedVoice === 'custom') {
+        if (!currentActiveVoiceId) {
+          alert(`No voice file ID found!\n\nEntry voiceId: ${entry.voiceId || 'null'}\nProp voiceId: ${voiceId || 'null'}\n\nPlease upload a voice file first.`);
+          setIsGeneratingAudio(false);
+          return;
+        }
+        if (!hasValidVoiceId) {
+          alert(`Invalid voice ID: "${currentActiveVoiceId}"\n\nPlease upload a voice file again.`);
+          setIsGeneratingAudio(false);
+          return;
+        }
       }
       
       const requestBody = {
@@ -269,45 +289,83 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
       let newAudioUrl = data.audioUrl;
       
       // Fix URL for mobile/network access
-      // If URL is relative, convert to absolute URL pointing to Flask backend
+      // Always convert relative URLs to absolute URLs pointing to Flask backend
       if (newAudioUrl && newAudioUrl.startsWith('/')) {
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
+        const port = window.location.port;
         const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
         
         // For network/mobile access, use Flask backend port (5001)
-        // For localhost, use relative path (proxy handles it)
-        if (!isLocalhost) {
-          // Network access - use Flask backend directly
-          newAudioUrl = `${protocol}//${hostname}:5001${newAudioUrl}`;
-          console.log("Converted audio URL for network access:", newAudioUrl);
+        // For localhost, also use Flask backend port to ensure it works
+        if (!isLocalhost || port === '5173') {
+          // Network access or Vite dev server - use Flask backend directly
+          // Extract IP from current hostname (for mobile) or use hostname
+          const backendHost = hostname;
+          newAudioUrl = `${protocol}//${backendHost}:5001${newAudioUrl}`;
+          console.log("Converted audio URL for network/localhost access:", newAudioUrl);
+          console.log("Original URL:", data.audioUrl);
+          console.log("Current location:", window.location.href);
         } else {
-          console.log("Using relative audio URL (localhost):", newAudioUrl);
+          console.log("Using relative audio URL:", newAudioUrl);
         }
       }
       
       if (newAudioUrl) {
         console.log("Setting audio URL:", newAudioUrl);
         setAudioUrl(newAudioUrl);
+        
+        // Set up the audio element and play immediately
+        // This is triggered by user click, so autoplay should work
         setTimeout(() => {
           if (audioRef.current) {
-            // Create a new audio element to test if the URL is accessible
-            const testAudio = new Audio(newAudioUrl);
-            testAudio.addEventListener('error', (e) => {
-              console.error("Audio element error:", e);
-              console.error("Audio URL:", newAudioUrl);
-              alert(`Failed to load audio file. Please check the server logs. URL: ${newAudioUrl}`);
-            });
-            
             audioRef.current.src = newAudioUrl;
             audioRef.current.load();
-            audioRef.current.play().then(() => {
-              setIsPlaying(true);
-            }).catch((error) => {
-              console.error("Audio playback error:", error);
-              console.error("Audio URL:", newAudioUrl);
-              alert(`Failed to play audio: ${error.message}. URL: ${newAudioUrl}`);
-            });
+            
+            // Play audio immediately - user gesture should allow this
+            const playPromise = audioRef.current.play();
+            
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => {
+                  setIsPlaying(true);
+                  setIsGeneratingAudio(false);
+                  console.log("✅ Audio playback started successfully");
+                })
+                .catch((error) => {
+                  console.error("❌ Audio playback error:", error);
+                  console.error("Error name:", error.name);
+                  console.error("Error message:", error.message);
+                  setIsGeneratingAudio(false);
+                  
+                  // Check if it's an autoplay policy error
+                  if (error.name === 'NotAllowedError' || 
+                      error.message.toLowerCase().includes('play') || 
+                      error.message.toLowerCase().includes('permission') ||
+                      error.message.toLowerCase().includes('user gesture') ||
+                      error.message.toLowerCase().includes('not allowed')) {
+                    // Autoplay blocked - user needs to click play button again
+                    // Don't show alert, just set the audio URL and let them click play
+                    console.warn("⚠️ Autoplay blocked - user can click play button to start");
+                    // Audio is loaded, just needs user to click play again
+                  } else {
+                    // Other errors - show helpful message
+                    console.error("Audio URL:", newAudioUrl);
+                    alert(`Failed to play audio: ${error.message}\n\nURL: ${newAudioUrl}\n\nTry clicking the play button again.`);
+                  }
+                });
+            } else {
+              // Play promise is undefined - try direct play
+              try {
+                audioRef.current.play();
+                setIsPlaying(true);
+                setIsGeneratingAudio(false);
+              } catch (e: any) {
+                console.error("Direct play failed:", e);
+                setIsGeneratingAudio(false);
+                // Audio is still loaded, user can click play
+              }
+            }
           }
         }, 100);
       } else {
