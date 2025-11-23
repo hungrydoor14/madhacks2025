@@ -18,6 +18,8 @@ ssl._create_default_https_context = ssl._create_unverified_context
 try:
     import easyocr
     easy_reader = easyocr.Reader(['en'])
+    print(easy_reader)
+
 except Exception as e:
     print(f"Warning: EasyOCR not available: {e}")
     easy_reader = None
@@ -80,6 +82,7 @@ def ocr():
         if max(image.size) > MAX_SIZE:
             image.thumbnail((MAX_SIZE, MAX_SIZE))
 
+<<<<<<< Updated upstream
         # ---- HANDWRITING OR PRINTED? ----
         if looks_handwritten(image) and easy_reader:
             # Use EasyOCR for handwriting
@@ -88,12 +91,17 @@ def ocr():
             cleaned_text = spell_fix(cleaned_text)
             return jsonify({"text": cleaned_text})
 
+=======
+>>>>>>> Stashed changes
         # ---- PRINTED TEXT (TESSERACT PATH) ----
         image = image.convert("L")
 
         # Optional: sharpen
         image = image.filter(ImageFilter.SHARPEN)
+<<<<<<< Updated upstream
         print("test")
+=======
+>>>>>>> Stashed changes
 
         # invert if its black background on white text
         image = auto_invert(image)
@@ -109,7 +117,7 @@ def ocr():
         # Return empty string if no text found, but still return success
         if not cleaned_text:
             cleaned_text = "No text could be extracted from this image."
-
+        print("TesseractOCR")
         return jsonify({"text": cleaned_text})
     except Exception as e:
         print(f"OCR Error: {str(e)}")
@@ -177,22 +185,10 @@ def looks_handwritten(pil_img):
         edge_density = edges.mean()
 
         # Handwriting tends to have FAR fewer sharp edges than printed text
-        return edge_density < 5
+        return edge_density < 10
     except Exception as e:
         print(f"Error in looks_handwritten: {e}")
         return False  # Default to printed text if detection fails
-
-def run_easyocr(pil_img):
-    """Run EasyOCR on image"""
-    if not easy_reader:
-        return ""
-    try:
-        img = np.array(pil_img)
-        results = easy_reader.readtext(img, detail=0)
-        return " ".join(results)
-    except Exception as e:
-        print(f"EasyOCR error: {e}")
-        return ""
 
 def spell_fix(text):
     """Fix spelling errors while protecting ordinals"""
