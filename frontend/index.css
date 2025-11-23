@@ -53,8 +53,21 @@
     }
   }
   
+  @keyframes spin-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
   .animate-fade-in {
     animation: fade-in 0.3s ease-out;
+  }
+  
+  .animate-spin-slow {
+    animation: spin-slow 3s linear infinite;
   }
 }
 

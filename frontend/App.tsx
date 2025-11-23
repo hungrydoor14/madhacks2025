@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { EntryScreen } from './EntryScreen';
-import { FileText, Upload, Sparkles, Send, Mic } from 'lucide-react';
+import { FileText, Upload, Sparkles, Mic, Zap, Brain, Wand2, Star, TrendingUp } from 'lucide-react';
 import { Entry } from './types';
+import { Logo } from './components/Logo';
 
 function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -150,33 +151,42 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
       <div className="max-w-3xl w-full">
         {/* Hero Section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-200/50 mb-4">
-            <FileText className="w-8 h-8 text-white" />
+        <div className="text-center mb-12">
+          <div className="mb-6 flex justify-center">
+            <Logo />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent mb-3">
-            Replae
-          </h1>
-          <p className="text-lg text-slate-600 max-w-xl mx-auto">
+          <p className="text-xl md:text-2xl text-slate-700 max-w-2xl mx-auto font-medium mb-4">
             Transform your notes into actionable insights with AI-powered OCR and intelligent assistance
           </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+            <span>Powered by Advanced OCR & Claude AI</span>
+            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+          </div>
         </div>
 
         {/* Upload Card */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-cyan-100/50 p-8 md:p-12">
-          <div className="space-y-6">
+        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-cyan-100/60 p-8 md:p-12 relative overflow-hidden">
+          {/* Decorative gradient background */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-200/20 to-blue-200/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-indigo-200/20 to-purple-200/20 rounded-full blur-3xl -ml-32 -mb-32"></div>
+          
+          <div className="relative space-y-6">
             {/* File Upload Area */}
             <div className="relative">
-              <div className="border-2 border-dashed border-cyan-300 rounded-2xl p-8 md:p-12 text-center hover:border-cyan-400 hover:bg-cyan-50/30 transition-all group">
-                <div className="flex flex-col items-center">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-100 to-blue-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <Upload className="w-8 h-8 text-cyan-600" />
+              <div className="border-2 border-dashed border-cyan-300 rounded-2xl p-8 md:p-12 text-center hover:border-cyan-400 hover:bg-gradient-to-br hover:from-cyan-50/50 hover:to-blue-50/30 transition-all group relative overflow-hidden">
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-50/0 via-blue-50/0 to-indigo-50/0 group-hover:from-cyan-50/30 group-hover:via-blue-50/20 group-hover:to-indigo-50/30 transition-all duration-500"></div>
+                
+                <div className="relative flex flex-col items-center">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg group-hover:shadow-xl">
+                    <Upload className="w-10 h-10 text-white" />
                   </div>
-                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Upload Your Notes</h3>
-                  <p className="text-slate-600 mb-6">Choose an image or take a photo to extract text</p>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-2">Upload Your Notes</h3>
+                  <p className="text-slate-600 mb-6 text-lg">Choose an image or take a photo to extract text</p>
                   
                   <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
-                    <label className="flex-1 cursor-pointer">
+                    <label className="flex-1 cursor-pointer group/btn">
                       <input
                         type="file"
                         accept="image/*"
@@ -188,12 +198,13 @@ function App() {
                         }}
                         className="hidden"
                       />
-                      <div className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium hover:from-cyan-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl text-center">
+                      <div className="px-6 py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold hover:from-cyan-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl text-center flex items-center justify-center gap-2 group-hover/btn:scale-105">
+                        <FileText className="w-5 h-5" />
                         Choose File
                       </div>
                     </label>
                     
-                    <label className="flex-1 cursor-pointer">
+                    <label className="flex-1 cursor-pointer group/btn">
                       <input
                         type="file"
                         accept="image/*"
@@ -206,7 +217,8 @@ function App() {
                         }}
                         className="hidden"
                       />
-                      <div className="px-6 py-3 rounded-xl bg-white border-2 border-cyan-600 text-cyan-600 font-medium hover:bg-cyan-50 transition-all text-center">
+                      <div className="px-6 py-4 rounded-xl bg-white border-2 border-cyan-600 text-cyan-600 font-semibold hover:bg-gradient-to-r hover:from-cyan-50 hover:to-blue-50 transition-all text-center flex items-center justify-center gap-2 group-hover/btn:scale-105 shadow-md hover:shadow-lg">
+                        <Sparkles className="w-5 h-5" />
                         Take Photo
                       </div>
                     </label>
@@ -216,44 +228,61 @@ function App() {
             </div>
 
             {/* Voice Upload Section */}
-            <div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200/50">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
-                  <Mic className="w-5 h-5 text-white" />
+            <div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-2 border-indigo-200/60 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-200/30 to-pink-200/30 rounded-full blur-2xl -mr-16 -mt-16"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
+                    <Mic className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-lg">Upload Your Voice</h3>
+                    <p className="text-sm text-slate-600">Optional: Add your voice sample for personalized audio</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900">Upload Your Voice</h3>
-                  <p className="text-xs text-slate-600">Optional: Add your voice sample for personalized audio</p>
-                </div>
+                <label className="cursor-pointer block">
+                  <input
+                    type="file"
+                    accept="audio/mpeg,audio/mp3,.mp3"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleVoiceUpload(file);
+                    }}
+                    className="hidden"
+                  />
+                  <div className="px-6 py-3 rounded-xl bg-white border-2 border-indigo-300 text-indigo-700 font-semibold hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 hover:border-indigo-400 transition-all text-center shadow-md hover:shadow-lg">
+                    {voiceFile ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="text-green-600">✓</span>
+                        <span className="truncate max-w-xs">{voiceFile.name}</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        <Mic className="w-5 h-5" />
+                        Choose MP3 File
+                      </span>
+                    )}
+                  </div>
+                </label>
+                {voiceFile && (
+                  <p className="text-xs text-indigo-600 mt-3 text-center font-medium flex items-center justify-center gap-1">
+                    <Zap className="w-3 h-3" />
+                    Voice file ready for Fish Audio
+                  </p>
+                )}
               </div>
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept="audio/mpeg,audio/mp3,.mp3"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleVoiceUpload(file);
-                  }}
-                  className="hidden"
-                />
-                <div className="px-6 py-3 rounded-xl bg-white border-2 border-indigo-300 text-indigo-700 font-medium hover:bg-indigo-50 hover:border-indigo-400 transition-all text-center">
-                  {voiceFile ? `✓ ${voiceFile.name}` : 'Choose MP3 File'}
-                </div>
-              </label>
-              {voiceFile && (
-                <p className="text-xs text-slate-500 mt-2 text-center">Voice file ready for Fish Audio</p>
-              )}
             </div>
 
             {showPreview && previewUrl && (
               <div className="mt-6 animate-fade-in">
-                <div className="relative rounded-2xl overflow-hidden border-2 border-cyan-200 shadow-lg">
+                <div className="relative rounded-2xl overflow-hidden border-2 border-cyan-200 shadow-xl group">
                   <img
                     src={previewUrl}
                     alt="Preview"
-                    className="w-full h-auto"
+                    className="w-full h-auto transition-transform group-hover:scale-[1.02]"
                   />
-                  <div className="absolute top-2 right-2 px-3 py-1 rounded-full bg-white/90 backdrop-blur-sm text-xs font-medium text-slate-700">
+                  <div className="absolute top-3 right-3 px-4 py-1.5 rounded-full bg-white/95 backdrop-blur-sm text-xs font-bold text-slate-700 shadow-lg flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-cyan-600" />
                     Preview
                   </div>
                 </div>
@@ -261,30 +290,41 @@ function App() {
                   <button
                     onClick={handleProcessImage}
                     disabled={isProcessing}
-                    className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold hover:from-cyan-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-6 py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:from-cyan-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-lg"
                   >
-                    {isProcessing ? 'Processing...' : 'Process Image'}
+                    {isProcessing ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-5 h-5" />
+                        Process Image
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={handleCancelPreview}
                     disabled={isProcessing}
-                    className="px-6 py-3 rounded-xl bg-white border-2 border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-4 rounded-xl bg-white border-2 border-slate-300 text-slate-700 font-bold hover:bg-gradient-to-r hover:from-slate-50 hover:to-gray-50 hover:border-slate-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                   >
-                    Change Image
+                    Change
                   </button>
                 </div>
               </div>
             )}
 
             {isProcessing && (
-              <div className="mt-6 p-6 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-2xl border border-cyan-200 animate-fade-in">
+              <div className="mt-6 p-6 bg-gradient-to-r from-cyan-50 via-blue-50 to-indigo-50 rounded-2xl border-2 border-cyan-200 animate-fade-in shadow-lg">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-cyan-200 border-t-cyan-600"></div>
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-cyan-200 border-t-cyan-600"></div>
+                    <div className="absolute inset-0 animate-ping rounded-full border-2 border-cyan-400 opacity-20"></div>
                   </div>
                   <div>
-                    <p className="font-semibold text-slate-900">Processing image...</p>
-                    <p className="text-sm text-slate-600">Extracting text with OCR</p>
+                    <p className="font-bold text-slate-900 text-lg">Processing image...</p>
+                    <p className="text-sm text-slate-600">Using advanced OCR with handwriting detection</p>
                   </div>
                 </div>
               </div>
@@ -307,21 +347,34 @@ function App() {
         </div>
 
         {/* Features */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-cyan-100 text-center">
-            <FileText className="w-6 h-6 text-cyan-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-900">OCR Extraction</p>
-            <p className="text-xs text-slate-600 mt-1">Accurate text recognition</p>
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-cyan-50 to-blue-50 border-2 border-cyan-200/60 text-center hover:shadow-xl hover:scale-105 transition-all group">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mx-auto mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+              <FileText className="w-7 h-7 text-white" />
+            </div>
+            <p className="text-base font-bold text-slate-900 mb-1">OCR Extraction</p>
+            <p className="text-xs text-slate-600">Handwriting & printed text</p>
           </div>
-          <div className="p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-blue-100 text-center">
-            <Sparkles className="w-6 h-6 text-blue-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-900">AI Assistant</p>
-            <p className="text-xs text-slate-600 mt-1">Smart note organization</p>
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200/60 text-center hover:shadow-xl hover:scale-105 transition-all group">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center mx-auto mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+              <Brain className="w-7 h-7 text-white" />
+            </div>
+            <p className="text-base font-bold text-slate-900 mb-1">AI Assistant</p>
+            <p className="text-xs text-slate-600">Claude AI powered</p>
           </div>
-          <div className="p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-indigo-100 text-center">
-            <Send className="w-6 h-6 text-indigo-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-900">Quick Actions</p>
-            <p className="text-xs text-slate-600 mt-1">Instant insights</p>
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200/60 text-center hover:shadow-xl hover:scale-105 transition-all group">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center mx-auto mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+              <Wand2 className="w-7 h-7 text-white" />
+            </div>
+            <p className="text-base font-bold text-slate-900 mb-1">Smart Processing</p>
+            <p className="text-xs text-slate-600">Spell check & corrections</p>
+          </div>
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200/60 text-center hover:shadow-xl hover:scale-105 transition-all group">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+              <TrendingUp className="w-7 h-7 text-white" />
+            </div>
+            <p className="text-base font-bold text-slate-900 mb-1">Voice Audio</p>
+            <p className="text-xs text-slate-600">Text-to-speech ready</p>
           </div>
         </div>
       </div>
