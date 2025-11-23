@@ -90,14 +90,17 @@ def ocr():
 
         # ---- PRINTED TEXT (TESSERACT PATH) ----
         image = image.convert("L")
+
+        # Optional: sharpen
+        image = image.filter(ImageFilter.SHARPEN)
+        print("test")
+
+        # invert if its black background on white text
         image = auto_invert(image)
 
         # Boost contrast
         enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(2.0)
-
-        # Optional: sharpen
-        image = image.filter(ImageFilter.SHARPEN)
+        image = enhancer.enhance(1.4)
 
         text = pytesseract.image_to_string(image)
         cleaned_text = manual_replacement(clean_text(text))
