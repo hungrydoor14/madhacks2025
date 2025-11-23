@@ -11,6 +11,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [voiceFileUrl, setVoiceFileUrl] = useState<string | null>(null);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -39,12 +40,25 @@ function App() {
         body: formData,
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.text || `OCR failed with status ${res.status}`);
+      // Clone response to avoid "body already read" error
+      const responseClone = res.clone();
+      let data;
+      
+      try {
+        data = await res.json();
+      } catch (jsonError) {
+        // If JSON parsing fails, try to get text from cloned response
+        const text = await responseClone.text().catch(() => "Unknown error");
+        console.error("Failed to parse JSON response:", text);
+        throw new Error(`Server returned invalid response: ${res.status} ${res.statusText}`);
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        const errorMsg = data.error || data.text || data.details || `OCR failed with status ${res.status}`;
+        console.error("OCR Error Details:", data);
+        throw new Error(errorMsg);
+      }
+
       const text = data.text || "";
       
       // Create new entry
@@ -63,6 +77,7 @@ function App() {
         imageUrl: previewUrl,
         voiceFile: voiceFile,
         voiceFileUrl: voiceFileUrl,
+        voiceId: voiceId,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -90,10 +105,42 @@ function App() {
     setPreviewUrl(null);
   };
 
-  const handleVoiceUpload = (file: File) => {
+  const handleVoiceUpload = async (file: File) => {
     setVoiceFile(file);
     const url = URL.createObjectURL(file);
     setVoiceFileUrl(url);
+    
+    // Upload voice file to backend
+    try {
+      const formData = new FormData();
+      formData.append("voice", file);
+      
+      const res = await fetch("/api/upload-voice", {
+        method: "POST",
+        body: formData,
+      });
+      
+      // Clone response to avoid "body already read" error
+      const responseClone = res.clone();
+      let data;
+      
+      try {
+        data = await res.json();
+      } catch (jsonError) {
+        const text = await responseClone.text().catch(() => "Unknown error");
+        console.error("Failed to parse JSON response:", text);
+        data = { error: `Upload failed with status ${res.status}` };
+      }
+
+      if (res.ok) {
+        setVoiceId(data.voiceId);
+        console.log("Voice file uploaded:", data.voiceId);
+      } else {
+        console.error("Failed to upload voice file:", data);
+      }
+    } catch (error) {
+      console.error("Error uploading voice file:", error);
+    }
   };
 
   const currentEntry = currentEntryId ? entries.find(e => e.id === currentEntryId) : null;
@@ -112,6 +159,7 @@ function App() {
       setCurrentEntryId(entryId);
       setVoiceFile(entry.voiceFile);
       setVoiceFileUrl(entry.voiceFileUrl);
+      setVoiceId(entry.voiceId || null);
       setShowEntryScreen(true);
     }
   };
@@ -119,6 +167,7 @@ function App() {
   const handleNewEntry = () => {
     setVoiceFile(null);
     setVoiceFileUrl(null);
+    setVoiceId(null);
     setCurrentEntryId(null);
     setShowEntryScreen(false);
     setShowPreview(false);
@@ -136,6 +185,7 @@ function App() {
         entries={entries}
         voiceFile={voiceFile}
         voiceFileUrl={voiceFileUrl}
+        voiceId={voiceId}
         onEntryUpdate={handleEntryUpdate}
         onEntrySelect={handleEntrySelect}
         onNewEntry={handleNewEntry}

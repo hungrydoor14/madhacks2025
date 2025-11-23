@@ -2,6 +2,7 @@ from flask import Flask, request, render_template, jsonify, send_from_directory
 from flask_cors import CORS
 import pytesseract
 import os
+import sys
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import numpy as np
 import re
@@ -10,6 +11,15 @@ from dotenv import load_dotenv
 import cv2
 import ssl
 from spellchecker import SpellChecker
+import uuid
+
+# Import TTS service - handle both absolute and relative imports
+try:
+    from tts_service import get_tts_service
+except ImportError:
+    # Try importing from current directory
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from tts_service import get_tts_service
 
 # SSL context for EasyOCR downloads
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -48,8 +58,48 @@ app = Flask(__name__, static_folder="../dist", static_url_path="")
 app.debug = True
 CORS(app)  # Enable CORS for React frontend
 
-UPLOAD_FOLDER = "uploads"
+# Error handler to ensure all errors return JSON
+@app.errorhandler(500)
+def internal_error(error):
+    import traceback
+    import sys
+    error_trace = traceback.format_exc()
+    exc_type, exc_value, exc_tb = sys.exc_info()
+    error_msg = str(error) if error else (str(exc_value) if exc_value else "Unknown error")
+    print(f"Unhandled 500 error: {error_msg}")
+    print(f"Traceback:\n{error_trace}")
+    response = jsonify({
+        "text": "",
+        "error": error_msg,
+        "details": error_trace[:1000] if len(error_trace) > 1000 else error_trace
+    })
+    response.status_code = 500
+    return response
+
+@app.errorhandler(Exception)
+def handle_all_exceptions(e):
+    import traceback
+    import sys
+    error_trace = traceback.format_exc()
+    error_msg = str(e)
+    print(f"Unhandled exception in error handler: {error_msg}")
+    print(f"Traceback:\n{error_trace}")
+    response = jsonify({
+        "text": "",
+        "error": error_msg,
+        "details": error_trace[:1000] if len(error_trace) > 1000 else error_trace
+    })
+    response.status_code = 500
+    return response
+
+# Get the directory where app.py is located
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(APP_DIR, "uploads")
+VOICE_FOLDER = os.path.join(UPLOAD_FOLDER, "voices")
+AUDIO_FOLDER = os.path.join(UPLOAD_FOLDER, "audio")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(VOICE_FOLDER, exist_ok=True)
+os.makedirs(AUDIO_FOLDER, exist_ok=True)
 
 @app.route("/")
 def index():
@@ -62,6 +112,7 @@ def index():
 @app.route("/ocr", methods=["POST"])
 def ocr():
     try:
+        print(f"OCR request received - Content-Type: {request.content_type}, Files: {list(request.files.keys()) if request.files else 'None'}")
         if "photo" not in request.files:
             return jsonify({"text": "No file uploaded", "error": "No file uploaded"}), 400
 
@@ -98,8 +149,18 @@ def ocr():
 
         # Optional: sharpen
         image = image.filter(ImageFilter.SHARPEN)
+        
+        # Additional preprocessing for better OCR accuracy
+        # Apply threshold to make text clearer
+        img_array = np.array(image)
+        # Use adaptive thresholding for better results
+        threshold = np.mean(img_array)
+        img_array = np.where(img_array > threshold, 255, 0).astype(np.uint8)
+        image = Image.fromarray(img_array)
 
-        text = pytesseract.image_to_string(image)
+        # Use Tesseract with better configuration
+        custom_config = r'--oem 3 --psm 6'  # OEM 3 = LSTM, PSM 6 = uniform block of text
+        text = pytesseract.image_to_string(image, config=custom_config)
         cleaned_text = manual_replacement(clean_text(text))
         cleaned_text = spell_fix(cleaned_text)
         
@@ -109,8 +170,17 @@ def ocr():
 
         return jsonify({"text": cleaned_text})
     except Exception as e:
-        print(f"OCR Error: {str(e)}")
-        return jsonify({"text": "", "error": str(e)}), 500
+        import traceback
+        error_trace = traceback.format_exc()
+        error_msg = str(e)
+        print(f"OCR Error: {error_msg}")
+        print(f"Full traceback:\n{error_trace}")
+        # Return error details for debugging
+        return jsonify({
+            "text": "", 
+            "error": error_msg,
+            "details": error_trace[:1000] if len(error_trace) > 1000 else error_trace
+        }), 500
 
 def clean_text(t):
     t = t.replace("\n\n", "\n")          # collapse blank lines
@@ -135,6 +205,11 @@ def manual_replacement(text):
 
     t = text
 
+    # Common OCR mistakes for "ARIAL"
+    t = re.sub(r'\btrial\b', 'ARIAL', t, flags=re.IGNORECASE)
+    t = re.sub(r'\bTrial\b', 'ARIAL', t)
+    t = re.sub(r'\bTRIAL\b', 'ARIAL', t)
+    
     # 0 mistaken for o
     t = re.sub(r'(?<=t)0', 'o', t)  # t0 -> to
     t = re.sub(r'(?<=T)0', 'o', t)
@@ -360,9 +435,152 @@ Remember: Rephrase the words only, don't interpret their meaning."""
         }), 500
 
 
+@app.route("/api/upload-voice", methods=["POST"])
+def upload_voice():
+    """Upload and store MP3 voice file"""
+    try:
+        print(f"Voice upload request received - Content-Type: {request.content_type}")
+        print(f"Request files keys: {list(request.files.keys()) if request.files else 'None'}")
+        
+        if not request.files:
+            return jsonify({"error": "No files in request"}), 400
+            
+        if "voice" not in request.files:
+            return jsonify({"error": "No voice file uploaded"}), 400
+        
+        file = request.files["voice"]
+        if not file or file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        # Validate file type - be more lenient, check MIME type too
+        filename_lower = file.filename.lower() if file.filename else ""
+        content_type = file.content_type or ""
+        
+        if not filename_lower.endswith(('.mp3', '.mpeg', '.wav', '.ogg')) and 'audio' not in content_type.lower():
+            return jsonify({
+                "error": "Only audio files are supported (MP3, WAV, OGG)",
+                "filename": file.filename,
+                "content_type": content_type
+            }), 400
+        
+        # Generate unique filename
+        file_id = str(uuid.uuid4())
+        safe_filename = file.filename or "audio_file"
+        filename = f"{file_id}_{safe_filename}"
+        filepath = os.path.join(VOICE_FOLDER, filename)
+        
+        # Ensure directory exists
+        os.makedirs(VOICE_FOLDER, exist_ok=True)
+        
+        # Save file
+        file.save(filepath)
+        
+        if not os.path.exists(filepath):
+            return jsonify({"error": "Failed to save file"}), 500
+        
+        return jsonify({
+            "success": True,
+            "voiceId": file_id,
+            "filename": filename,
+            "message": "Voice file uploaded successfully"
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        error_msg = str(e)
+        print(f"Voice upload error: {error_msg}")
+        print(f"Full traceback:\n{error_trace}")
+        return jsonify({
+            "error": error_msg,
+            "details": error_trace[:1000] if len(error_trace) > 1000 else error_trace
+        }), 500
+
+@app.route("/api/generate-audio", methods=["POST"])
+def generate_audio():
+    """Generate audio from text using TTS service"""
+    try:
+        data = request.get_json()
+        text = data.get("text", "")
+        voice_id = data.get("voiceId", None)
+        use_custom_voice = data.get("useCustomVoice", False)
+        
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+        
+        # Get voice file path if custom voice is requested
+        voice_file_path = None
+        if use_custom_voice and voice_id:
+            if not os.path.exists(VOICE_FOLDER):
+                return jsonify({"error": "Voice folder not found"}), 404
+            
+            # Find voice file by ID
+            voice_files = os.listdir(VOICE_FOLDER)
+            for filename in voice_files:
+                if filename.startswith(voice_id):
+                    voice_file_path = os.path.join(VOICE_FOLDER, filename)
+                    break
+            
+            if not voice_file_path or not os.path.exists(voice_file_path):
+                return jsonify({
+                    "error": "Voice file not found",
+                    "voiceId": voice_id
+                }), 404
+        
+        # Generate audio using TTS service
+        tts = get_tts_service()
+        
+        # If custom voice was requested, don't allow fallback to default
+        # Only use default voice if custom voice was not explicitly requested
+        use_default_voice_param = not use_custom_voice
+        
+        try:
+            output_path = tts.generate_audio(
+                text=text,
+                voice_file_path=voice_file_path,
+                use_default_voice=use_default_voice_param
+            )
+        except Exception as e:
+            error_msg = str(e)
+            return jsonify({
+                "error": "Failed to generate audio with custom voice",
+                "details": error_msg,
+                "suggestion": "The Fish Audio API may not support voice cloning, or the API endpoint/format may be incorrect. Check the backend logs for more details."
+            }), 500
+        
+        if not output_path:
+            error_details = "TTS service may not be configured. Check FISH_AUDIO_API_KEY in .env file."
+            if use_custom_voice:
+                error_details += " Custom voice generation failed."
+            return jsonify({
+                "error": "Failed to generate audio",
+                "details": error_details
+            }), 500
+        
+        # Return the audio file URL
+        audio_filename = os.path.basename(output_path)
+        audio_url = f"/uploads/audio/{audio_filename}"
+        
+        return jsonify({
+            "success": True,
+            "audioUrl": audio_url,
+            "message": "Audio generated successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/uploads/audio/<path:filename>")
+def serve_audio(filename):
+    """Serve generated audio files"""
+    return send_from_directory(AUDIO_FOLDER, filename)
+
+@app.route("/uploads/voices/<path:filename>")
+def serve_voice(filename):
+    """Serve uploaded voice files"""
+    return send_from_directory(VOICE_FOLDER, filename)
+
 @app.route("/credits")
 def credits():
     return render_template("credits.html")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    app.run(host="0.0.0.0", port=5002)

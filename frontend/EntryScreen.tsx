@@ -7,6 +7,7 @@ interface EntryScreenProps {
   entries: Entry[];
   voiceFile: File | null;
   voiceFileUrl: string | null;
+  voiceId: string | null;
   onEntryUpdate: (entryId: string, updates: Partial<Entry>) => void;
   onEntrySelect: (entryId: string) => void;
   onNewEntry: () => void;
@@ -21,7 +22,7 @@ const SUGGESTED_QUESTIONS = [
   "What are my priorities?"
 ];
 
-export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFileUrl, onEntryUpdate, onEntrySelect, onNewEntry, onBack }: EntryScreenProps) {
+export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFileUrl, voiceId, onEntryUpdate, onEntrySelect, onNewEntry, onBack }: EntryScreenProps) {
   const [selectedMode, setSelectedMode] = useState<ModeType>('default');
   const [messages, setMessages] = useState<Message[]>(entry.messages);
   const [inputMessage, setInputMessage] = useState('');
@@ -30,10 +31,14 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
   const [selectedVoice, setSelectedVoice] = useState<'default' | 'custom'>('default');
   const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [audioUrl] = useState<string | null>(null); // Will be set when Fish Audio generates audio
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editTopicName, setEditTopicName] = useState(entry.topic);
+  
+  // Use voiceId from entry if available, otherwise use prop
+  const activeVoiceId = entry.voiceId || voiceId;
 
   // Update messages when entry changes
   useEffect(() => {
@@ -143,28 +148,88 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
     setInputMessage(question);
   };
 
-  const handlePlayAudio = () => {
-    // TODO: Generate audio using Fish Audio API with selected voice
-    // For now, this is a placeholder
-    if (audioUrl) {
-      if (audioRef.current) {
-        if (isPlaying) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-        } else {
-          audioRef.current.play();
-          setIsPlaying(true);
-        }
+  const handlePlayAudio = async () => {
+    if (audioUrl && audioRef.current && !isGeneratingAudio) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        audioRef.current.play();
+        setIsPlaying(true);
       }
-    } else {
-      // Generate audio - placeholder for Fish Audio integration
-      alert(`Generating audio with ${selectedVoice === 'default' ? 'default' : 'your custom'} voice...`);
+      return;
+    }
+    
+    const textToSpeak = selectedMode === 'default' 
+      ? entry.extractedText 
+      : messages.length > 1 
+        ? messages[messages.length - 1].content 
+        : entry.extractedText;
+    
+    if (!textToSpeak || !textToSpeak.trim()) {
+      alert("No text available to generate audio");
+      return;
+    }
+    
+    setIsGeneratingAudio(true);
+    
+    try {
+      const currentSelectedVoice = selectedVoice;
+      const currentActiveVoiceId = activeVoiceId;
+      const useCustomVoice = currentSelectedVoice === 'custom' && currentActiveVoiceId !== null;
+      
+      if (useCustomVoice && !currentActiveVoiceId) {
+        alert("No voice file found. Please upload a voice file first.");
+        setIsGeneratingAudio(false);
+        return;
+      }
+      
+      const res = await fetch("/api/generate-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textToSpeak,
+          voiceId: currentActiveVoiceId,
+          useCustomVoice: useCustomVoice
+        })
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to generate audio");
+      }
+      
+      const data = await res.json();
+      const newAudioUrl = data.audioUrl;
+      
+      if (newAudioUrl) {
+        setAudioUrl(newAudioUrl);
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.src = newAudioUrl;
+            audioRef.current.load();
+            audioRef.current.play().then(() => {
+              setIsPlaying(true);
+            }).catch((error) => {
+              console.error("Audio playback error:", error);
+              alert(`Failed to play audio: ${error.message}`);
+            });
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error("Error generating audio:", error);
+      alert(`Failed to generate audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsGeneratingAudio(false);
     }
   };
 
   const handleVoiceChange = (voice: 'default' | 'custom') => {
     setSelectedVoice(voice);
     setShowVoiceDropdown(false);
+    setAudioUrl(null);
+    setIsPlaying(false);
   };
 
   // Close dropdown when clicking outside
@@ -437,9 +502,15 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handlePlayAudio}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+                        disabled={isGeneratingAudio}
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {isPlaying ? (
+                        {isGeneratingAudio ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                            <span className="text-sm font-medium">Generating...</span>
+                          </>
+                        ) : isPlaying ? (
                           <>
                             <Pause className="w-4 h-4" />
                             <span className="text-sm font-medium">Pause</span>
@@ -626,9 +697,15 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handlePlayAudio}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+                        disabled={isGeneratingAudio}
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {isPlaying ? (
+                        {isGeneratingAudio ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                            <span className="text-sm font-medium">Generating...</span>
+                          </>
+                        ) : isPlaying ? (
                           <>
                             <Pause className="w-4 h-4" />
                             <span className="text-sm font-medium">Pause</span>
