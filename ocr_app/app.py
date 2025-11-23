@@ -12,9 +12,13 @@ import ssl
 from spellchecker import SpellChecker
 import uuid
 
+from openai import OpenAI
+import base64
+
 # Force-load .env from project root (parent of ocr_app)
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
 load_dotenv(ENV_PATH)
+client = OpenAI()
 
 # Initialize spell checker
 spell = SpellChecker()
@@ -59,63 +63,52 @@ def index():
     # Fallback to old template during development
     return render_template("index.html")
 
+
 @app.route("/ocr", methods=["POST"])
 def ocr():
     try:
         if "photo" not in request.files:
-            return jsonify({"text": "No file uploaded", "error": "No file uploaded"}), 400
+            return jsonify({"text": "No file uploaded"}), 400
 
         file = request.files["photo"]
-        
-        if file.filename == '':
-            return jsonify({"text": "", "error": "No file selected"}), 400
 
-        image = Image.open(file)
+        if file.filename == "":
+            return jsonify({"text": "No file selected"}), 400
 
-        # Fix rotation
-        image = ImageOps.exif_transpose(image)
+        # ---- READ IMAGE BYTES FROM UPLOAD ----
+        img_bytes = file.read()
 
-        # Resize large images
-        MAX_SIZE = 1500
-        if max(image.size) > MAX_SIZE:
-            image.thumbnail((MAX_SIZE, MAX_SIZE))
+        # ---- BASE64 ENCODE ----
+        import base64
+        b64_image = base64.b64encode(img_bytes).decode("utf-8")
 
-        # ---- PRINTED TEXT (TESSERACT PATH) ----
-        image = image.convert("L")
+        print("Sending to GPT-4.1 with data:image/... base64…")
 
-        # Optional: sharpen
-        image = image.filter(ImageFilter.SHARPEN)
+        # ---- VISION REQUEST USING EXACT SYNTAX YOU PROVIDED ----
+        response = client.responses.create(
+            model="gpt-4.1",
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "input_text", "text": "You are a transcription engine. You MUST ONLY output the exact readable text found in the image. No summaries. No interpretation. No corrections. No punctuation changes. No additions. No removals. If unclear text exists, transcribe it as-is (even partial). If nothing is readable, return an empty string."},
+                        {
+                            "type": "input_image",
+                            "image_url": f"data:image/jpeg;base64,{b64_image}",
+                        },
+                    ],
+                }
+            ],
+        )
 
-        print("test")
+        # ---- EXTRACT TEXT ----
+        out = response.output_text
 
-        # invert if its black background on white text
-        image = auto_invert(image)
-
-        # Boost contrast
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(1.4)
-
-        # ---- RAW TESSERACT OUTPUT ----
-        text = pytesseract.image_to_string(image)
-
-        # light cleaning before sending to Claude 
-        basic = manual_replacement(clean_text(text))
-
-        print("Sending to Claude cleanup...")
-
-        # ---- CLAUDE OCR CLEANUP (GUESSING / FIXING OCR ERRORS) ----
-        cleaned_text = claude_ocr_cleanup(basic)
-
-        # Return fallback if nothing extracted
-        if not cleaned_text or not cleaned_text.strip():
-            cleaned_text = "No text could be extracted from this image."
-
-        print("TesseractOCR")
-        return jsonify({"text": cleaned_text})
+        return jsonify({"text": out})
 
     except Exception as e:
-        print(f"OCR Error: {str(e)}")
-        return jsonify({"text": "", "error": str(e)}), 500
+        print("OCR Error:", e)
+        return jsonify({"error": str(e)}), 500
 
 def clean_text(t):
     # Preserve punctuation and line structure
