@@ -72,7 +72,7 @@ def ocr():
                 {
                     "role": "user",
                     "content": [
-                        { "type": "input_text", "text": "Transcribe every readable word in this image. DO NOT ADD ANYTHING ELSE, AND RESPOND ONLY WITH THE READABLE SENTENCE OR SENTENCES." },
+                        { "type": "input_text", "text": "You are a transcription engine. You MUST ONLY output the exact readable text found in the image. No summaries. No interpretation. No corrections. No punctuation changes. No additions. No removals. If unclear text exists, transcribe it as-is (even partial). If nothing is readable, return an empty string."},
                         {
                             "type": "input_image",
                             "image_url": f"data:image/jpeg;base64,{b64_image}",
