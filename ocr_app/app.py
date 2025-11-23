@@ -302,6 +302,7 @@ Rules:
 - Remove garbage characters.
 - You ARE allowed to infer what the intended English text was.
 - Output clean, natural English.
+- YOU CANNOT EVER, EVER, EVER REPLY WITH MORE THAN JUST THE INFERRED TEXT. DO NOT EXPLAIN YOUR REASONING, JUST PROVIDED THE TEXT.
 """
 
         response = requests.post(
