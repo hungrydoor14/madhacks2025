@@ -81,21 +81,25 @@ def ocr():
             image.thumbnail((MAX_SIZE, MAX_SIZE))
 
         # ---- HANDWRITING OR PRINTED? ----
-        if looks_handwritten(image) and easy_reader:
+        is_handwritten = looks_handwritten(image)
+        print(f"Handwriting detection: is_handwritten={is_handwritten}, easy_reader_available={easy_reader is not None}")
+        
+        if is_handwritten and easy_reader:
             # Use EasyOCR for handwriting
+            print("Using EasyOCR for handwriting")
             text = run_easyocr(image)
             cleaned_text = clean_text(text)
             cleaned_text = spell_fix(cleaned_text)
-            cleaned_text = add_missing_punctuation(cleaned_text)
             return jsonify({"text": cleaned_text})
+        elif is_handwritten and not easy_reader:
+            print("Warning: Handwriting detected but EasyOCR not available, falling back to Tesseract")
 
         # ---- PRINTED TEXT (TESSERACT PATH) ----
+        print("Using Tesseract for printed text")
         image = image.convert("L")
 
         # Optional: sharpen
         image = image.filter(ImageFilter.SHARPEN)
-
-        print("test")
 
         # invert if its black background on white text
         image = auto_invert(image)
@@ -104,16 +108,9 @@ def ocr():
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(1.4)
 
-        # Use Tesseract config to better detect and preserve punctuation
-        # PSM 6 = Assume uniform block of text (better for punctuation)
-        # OEM 3 = Default OCR engine mode
-        # Whitelist includes all letters, numbers, and common punctuation marks
-        # This helps Tesseract recognize punctuation marks that might be missed
-        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,!?;:()[]{}\'"-–—/\\@#$%&*+=<>|~`_'
-        text = pytesseract.image_to_string(image, config=custom_config)
+        text = pytesseract.image_to_string(image)
         cleaned_text = manual_replacement(clean_text(text))
         cleaned_text = spell_fix(cleaned_text)
-        cleaned_text = add_missing_punctuation(cleaned_text)
         
         # Return empty string if no text found, but still return success
         if not cleaned_text:
@@ -176,22 +173,71 @@ def manual_replacement(text):
 def looks_handwritten(pil_img):
     """Detect if image contains handwriting vs printed text"""
     try:
+        # Convert PIL image to numpy array
         img = np.array(pil_img)
+        
         # Handle grayscale images
         if len(img.shape) == 2:
             gray = img
         else:
+            # Convert RGB to grayscale
             gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
-        # Use edges to estimate structure
-        edges = cv2.Canny(gray, 30, 150)
-        edge_density = edges.mean()
+        # Resize if too large for faster processing (but keep aspect ratio)
+        h, w = gray.shape
+        if max(h, w) > 1000:
+            scale = 1000 / max(h, w)
+            new_w, new_h = int(w * scale), int(h * scale)
+            gray = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-        # Handwriting tends to have FAR fewer sharp edges than printed text
-        return edge_density < 5
+        # Method 1: Canny edge detection analysis
+        edges = cv2.Canny(gray, 50, 150)
+        total_pixels = edges.shape[0] * edges.shape[1]
+        edge_pixels = np.sum(edges > 0)
+        edge_density = (edge_pixels / total_pixels) * 100 if total_pixels > 0 else 0
+        
+        # Calculate variance in edge distribution
+        edge_variance = float(np.var(edges))
+        
+        # Calculate line structure (printed text has more regular horizontal lines)
+        horizontal_projection = np.sum(edges, axis=1)
+        horizontal_variance = float(np.var(horizontal_projection))
+        
+        # Method 2: Contour analysis (handwriting has more irregular contours)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contour_count = len(contours)
+        avg_contour_area = np.mean([cv2.contourArea(c) for c in contours]) if contours else 0
+        
+        # Handwriting indicators (multiple criteria):
+        # 1. Low edge density (handwriting is smoother, less sharp edges)
+        # 2. High variance in edge distribution (more irregular patterns)
+        # 3. Lower horizontal line regularity
+        # 4. More irregular contours
+        
+        criteria_met = 0
+        if edge_density < 8.0:
+            criteria_met += 1
+        if edge_density < 15.0 and edge_variance > 500:
+            criteria_met += 1
+        if edge_density < 12.0 and horizontal_variance < 1000:
+            criteria_met += 1
+        if contour_count > 50 and avg_contour_area < 100:
+            criteria_met += 1
+        
+        # If 2+ criteria suggest handwriting, classify as handwritten
+        is_handwritten = criteria_met >= 2
+        
+        print(f"Handwriting detection: edge_density={edge_density:.2f}%, edge_variance={edge_variance:.2f}, "
+              f"horizontal_variance={horizontal_variance:.2f}, contours={contour_count}, "
+              f"criteria_met={criteria_met}, result={is_handwritten}")
+        
+        return is_handwritten
     except Exception as e:
         print(f"Error in looks_handwritten: {e}")
-        return False  # Default to printed text if detection fails
+        import traceback
+        traceback.print_exc()
+        # Default to printed text if detection fails
+        return False
 
 def run_easyocr(pil_img):
     """Run EasyOCR on image"""
