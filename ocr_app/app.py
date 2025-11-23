@@ -526,7 +526,7 @@ def upload_voice():
             "error": error_msg,
             "details": error_trace[:1000] if len(error_trace) > 1000 else error_trace
         }), 500
-
+    
 @app.route("/api/generate-audio", methods=["POST"])
 def generate_audio():
     """Generate audio from text using TTS service"""
