@@ -13,21 +13,24 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5001',
-        changeOrigin: true,
-      },
-      '/ocr': {
-        target: 'http://localhost:5001',
-        changeOrigin: true,
-      },
+  host: "0.0.0.0",
+  port: 5173,
+  allowedHosts: [
+    "10.140.209.0",   // your LAN IP
+    "localhost",
+    "127.0.0.1"
+  ],
+  proxy: {
+    '/api': {
+      target: 'http://localhost:5001',
+      changeOrigin: true,
+    },
+    '/ocr': {
+      target: 'http://localhost:5001',
+      changeOrigin: true,
     },
   },
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-  },
+},
+
 });
 
