@@ -39,7 +39,21 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
   const [editTopicName, setEditTopicName] = useState(entry.topic);
   
   // Use voiceId from entry if available, otherwise use prop
+  // Priority: entry.voiceId > voiceId prop
   const activeVoiceId = entry.voiceId || voiceId;
+  
+  // Debug: Log voice-related state when it changes
+  useEffect(() => {
+    if (selectedVoice === 'custom') {
+      console.log("Voice state (Custom selected):", {
+        entryVoiceId: entry.voiceId,
+        propVoiceId: voiceId,
+        activeVoiceId,
+        hasVoiceFile: !!voiceFile,
+        selectedVoice
+      });
+    }
+  }, [entry.voiceId, voiceId, activeVoiceId, voiceFile, selectedVoice]);
 
   // Update messages when entry changes
   useEffect(() => {
@@ -179,20 +193,38 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
       const currentActiveVoiceId = activeVoiceId;
       const useCustomVoice = currentSelectedVoice === 'custom' && currentActiveVoiceId !== null;
       
-      if (useCustomVoice && !currentActiveVoiceId) {
+      // Debug logging
+      console.log("Audio Generation Debug:", {
+        selectedMode,
+        selectedVoice: currentSelectedVoice,
+        activeVoiceId: currentActiveVoiceId,
+        entryVoiceId: entry.voiceId,
+        propVoiceId: voiceId,
+        useCustomVoice,
+        textLength: textToSpeak.length
+      });
+      
+      if (currentSelectedVoice === 'custom' && !currentActiveVoiceId) {
         alert("No voice file found. Please upload a voice file first.");
         setIsGeneratingAudio(false);
         return;
       }
       
+      const requestBody = {
+        text: textToSpeak,
+        voiceId: currentActiveVoiceId,
+        useCustomVoice: useCustomVoice
+      };
+      
+      console.log("Sending audio generation request:", {
+        ...requestBody,
+        text: textToSpeak.substring(0, 100) + "..."
+      });
+      
       const res = await fetch("/api/generate-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: textToSpeak,
-          voiceId: currentActiveVoiceId,
-          useCustomVoice: useCustomVoice
-        })
+        body: JSON.stringify(requestBody)
       });
       
       // Clone response to avoid "body already read" error

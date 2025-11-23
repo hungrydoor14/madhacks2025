@@ -110,8 +110,17 @@ function App() {
       
       if (res.ok) {
         const data = await res.json();
-        setVoiceId(data.voiceId);
-        console.log("Voice file uploaded:", data.voiceId);
+        const newVoiceId = data.voiceId;
+        setVoiceId(newVoiceId);
+        console.log("Voice file uploaded:", newVoiceId);
+        
+        // Update current entry with voiceId if it exists
+        if (currentEntryId) {
+          const entry = entries.find(e => e.id === currentEntryId);
+          if (entry) {
+            handleEntryUpdate(currentEntryId, { voiceId: newVoiceId, voiceFile: file, voiceFileUrl: url });
+          }
+        }
       } else {
         console.error("Failed to upload voice file");
       }

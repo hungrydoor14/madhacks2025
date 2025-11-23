@@ -536,6 +536,9 @@ def generate_audio():
         voice_id = data.get("voiceId", None)
         use_custom_voice = data.get("useCustomVoice", False)
         
+        # Debug logging
+        print(f"Audio generation request: use_custom_voice={use_custom_voice}, voice_id={voice_id}, text_length={len(text) if text else 0}")
+        
         if not text:
             return jsonify({"error": "No text provided"}), 400
         
@@ -543,20 +546,32 @@ def generate_audio():
         voice_file_path = None
         if use_custom_voice and voice_id:
             if not os.path.exists(VOICE_FOLDER):
+                print(f"Voice folder not found: {VOICE_FOLDER}")
                 return jsonify({"error": "Voice folder not found"}), 404
             
             # Find voice file by ID
             voice_files = os.listdir(VOICE_FOLDER)
+            print(f"Looking for voice file with ID: {voice_id}")
+            print(f"Available voice files: {voice_files}")
+            
             for filename in voice_files:
                 if filename.startswith(voice_id):
                     voice_file_path = os.path.join(VOICE_FOLDER, filename)
+                    print(f"Found voice file: {voice_file_path}")
                     break
             
             if not voice_file_path or not os.path.exists(voice_file_path):
+                print(f"Voice file not found for ID: {voice_id}")
                 return jsonify({
                     "error": "Voice file not found",
-                    "voiceId": voice_id
+                    "voiceId": voice_id,
+                    "availableFiles": voice_files[:5]  # Return first 5 for debugging
                 }), 404
+        elif use_custom_voice and not voice_id:
+            print("Warning: use_custom_voice=True but voice_id is None")
+            return jsonify({
+                "error": "Custom voice requested but no voice ID provided"
+            }), 400
         
         # Generate audio using TTS service
         try:
