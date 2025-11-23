@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { EntryScreen } from './EntryScreen';
 import { FileText, Upload, Sparkles, Send, Mic } from 'lucide-react';
 import { Entry } from './types';
+import { Logo } from './components/Logo';
 
 function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -151,12 +152,9 @@ function App() {
       <div className="max-w-3xl w-full">
         {/* Hero Section */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-200/50 mb-4">
-            <FileText className="w-8 h-8 text-white" />
+          <div className="flex justify-center mb-4">
+            <Logo />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent mb-3">
-            Replae
-          </h1>
           <p className="text-lg text-slate-600 max-w-xl mx-auto">
             Transform your notes into actionable insights with AI-powered OCR and intelligent assistance
           </p>

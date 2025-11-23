@@ -56,5 +56,9 @@
   .animate-fade-in {
     animation: fade-in 0.3s ease-out;
   }
+  
+  .animate-spin-slow {
+    animation: spin 3s linear infinite;
+  }
 }
 

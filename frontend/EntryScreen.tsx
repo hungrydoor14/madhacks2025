@@ -1,6 +1,7 @@
 import { FileText, Sparkles, Send, Play, Pause, ChevronDown, Plus, Clock, Menu, X, Home, Edit2, Check, X as XIcon } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Entry, Message } from './types';
+import { Logo } from './components/Logo';
 
 interface EntryScreenProps {
   entry: Entry;
@@ -210,11 +211,8 @@ export function EntryScreen({ entry, entries, voiceFile, voiceFileUrl: _voiceFil
       <div className={`fixed md:static inset-y-0 left-0 w-72 border-r border-cyan-200/40 bg-white/90 md:bg-white/60 backdrop-blur-xl p-6 flex-col shadow-lg z-50 transition-transform ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       } flex`}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
-            <FileText className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">Replae</h1>
+        <div className="mb-6">
+          <Logo className="text-2xl md:text-3xl" />
         </div>
         
         {/* New Entry Button */}
