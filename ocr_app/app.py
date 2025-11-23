@@ -108,6 +108,21 @@ def ocr():
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(1.4)
 
+               # Use Tesseract config to better detect and preserve punctuation
+        # PSM 6 = Assume uniform block of text (better for punctuation)
+        # OEM 3 = Default OCR engine mode
+        # Whitelist includes all letters, numbers, and common punctuation marks
+        # This helps Tesseract recognize punctuation marks that might be missed
+        custom_config = (
+            r'--oem 3 --psm 6 '
+            r'-c tessedit_char_whitelist='
+            r'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            r'.,!?;:()[]{}\'-–—/\\@#$%&*+=<>|~`_'
+        )
+
+        # If you want to USE the custom config with Tesseract:
+        # text = pytesseract.image_to_string(image, config=custom_config)
+
         text = pytesseract.image_to_string(image)
         cleaned_text = manual_replacement(clean_text(text))
         cleaned_text = spell_fix(cleaned_text)
